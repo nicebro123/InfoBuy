@@ -1,0 +1,58 @@
+[
+  {
+    "question": "Compute 40 + 2.",
+    "answer": "42",
+    "interaction_policy": "hsp",
+    "data_role": "train",
+    "score": 0,
+    "teacher_tokens_used": 0,
+    "ask_count": 0,
+    "verify_count": 0,
+    "accept_count": 0,
+    "invalid_accept_count": 0,
+    "denied_action_count": 0,
+    "events": [],
+    "segments": [
+      {"source": "user", "text": "Compute 40 + 2.", "loss": false},
+      {"source": "student", "text": "The answer is \\boxed{41}.", "loss": true}
+    ]
+  },
+  {
+    "question": "Compute 40 + 2.",
+    "answer": "42",
+    "interaction_policy": "hsp",
+    "data_role": "train",
+    "score": 1,
+    "teacher_tokens_used": 18,
+    "ask_count": 1,
+    "verify_count": 0,
+    "accept_count": 0,
+    "invalid_accept_count": 0,
+    "denied_action_count": 0,
+    "events": [{"action": "ask", "teacher_tokens_used": 18, "error": null}],
+    "segments": [
+      {"source": "user", "text": "Compute 40 + 2.", "loss": false},
+      {"source": "student", "text": "I need a next step. <ASK>", "loss": true},
+      {"source": "teacher", "text": "\n<TEACHER_HELP>\nAdd 40 and 2 directly.\n</TEACHER_HELP>\n", "loss": false},
+      {"source": "student", "text": "Therefore the answer is \\boxed{42}.", "loss": true}
+    ]
+  },
+  {
+    "question": "Compute 1 + 1.",
+    "answer": "2",
+    "interaction_policy": "hsp",
+    "data_role": "train",
+    "score": 1,
+    "teacher_tokens_used": 0,
+    "ask_count": 0,
+    "verify_count": 0,
+    "accept_count": 0,
+    "invalid_accept_count": 0,
+    "denied_action_count": 0,
+    "events": [],
+    "segments": [
+      {"source": "user", "text": "Compute 1 + 1.", "loss": false},
+      {"source": "student", "text": "The answer is \\boxed{2}.", "loss": true}
+    ]
+  }
+]

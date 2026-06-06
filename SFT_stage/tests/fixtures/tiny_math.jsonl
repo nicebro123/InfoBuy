@@ -1,0 +1,2 @@
+{"id":"toy_1","question":"Compute 6 * 7.","gold_solution":"Multiplying gives 42. Therefore, the final answer is \\boxed{42}.","gold_answer":"42"}
+{"id":"toy_2","question":"What is 10 - 3?","answer":"Subtracting gives 7, so \\boxed{7}."}

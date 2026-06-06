@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# OS
+.DS_Store
+
+# Environments
+.venv/
+venv/
+env/
+
+# Storage must stay OUTSIDE the repo (see docs/hsp/storage_layout.md).
+# data/ is only an optional legacy symlink; never track downloaded weights,
+# datasets, checkpoints, or local backups if they accidentally land here.
+/data
+InfoBuy_store/
+hsp_store/
+backups/
+store/
+models/
+checkpoints/
+datasets/
+hf_cache/
+inference_results/
+
+# Data artifacts (large; rebuild via build_and_upload_hsp_dataset.py)
+# Uncomment if you do not want to track generated datasets:
+# data/hsp/raw/
+# data/hsp/protocol/
+# data/hsp/flat/
+
+# Eval outputs
+evaluation/
+results_*/

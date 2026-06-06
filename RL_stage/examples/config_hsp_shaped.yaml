@@ -1,0 +1,148 @@
+data:
+  train_files: ${oc.env:INFOBUY_GENERATED_DATA}/raw/numinamath_cot_synthetic_math_train_pilot_v1_800.jsonl
+  val_files: ${oc.env:INFOBUY_GENERATED_DATA}/raw/numinamath_cot_synthetic_math_validation_pilot_v1_200.jsonl
+  prompt_key: question
+  answer_key: gold_answer
+  image_key: images
+  video_key: videos
+  image_dir: null
+  video_fps: 2.0
+  max_prompt_length: 4096
+  max_response_length: 8192
+  rollout_batch_size: 128
+  mini_rollout_batch_size: null
+  val_batch_size: 1024
+  format_prompt: ./examples/format_prompt/math.jinja
+  override_chat_template: null
+  shuffle: true
+  seed: 1
+  min_pixels: 262144
+  max_pixels: 4194304
+  filter_overlong_prompts: true
+
+algorithm:
+  adv_estimator: grpo
+  disable_kl: false
+  use_kl_loss: true
+  kl_penalty: low_var_kl
+  kl_coef: 1.0e-2
+  online_filtering: false
+  filter_key: overall
+  filter_low: 0.01
+  filter_high: 0.99
+
+worker:
+  actor:
+    global_batch_size: 32
+    micro_batch_size_per_device_for_update: 2
+    micro_batch_size_per_device_for_experience: 4
+    max_grad_norm: 1.0
+    padding_free: true
+    dynamic_batching: true
+    ulysses_size: 1
+    model:
+      model_path: ${oc.env:INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft
+      enable_gradient_checkpointing: true
+      trust_remote_code: false
+      freeze_vision_tower: false
+    optim:
+      lr: 1.0e-6
+      weight_decay: 1.0e-2
+      strategy: adamw
+      lr_warmup_ratio: 0.0
+    fsdp:
+      enable_full_shard: true
+      enable_cpu_offload: false
+      enable_rank0_init: true
+    offload:
+      offload_params: false
+      offload_optimizer: false
+
+  rollout:
+    interaction_policy: hsp
+    n: 8
+    temperature: 1.0
+    top_p: 1.0
+    global_max_tokens: 8192
+    base_small_model_max_tokens: 8192
+    max_interactions: 3
+    # Fallback teacher budgets used only when the student omits N in
+    # <ASK>N</ASK> / <VERIFY>N</VERIFY>. The student-requested N takes priority.
+    ask_budget_tokens: 64
+    verify_budget_tokens: 96
+    teacher_help_temperature: 0.7
+    teacher_review_temperature: 0.0
+    gpu_memory_utilization: 0.6
+    enforce_eager: false
+    enable_chunked_prefill: false
+    tensor_parallel_size: 1
+    max_num_batched_tokens: 20000
+    disable_tqdm: false
+    port: 7778
+    val_override_config:
+      temperature: 0.7
+      top_p: 0.95
+      n: 8
+
+  ref:
+    fsdp:
+      enable_full_shard: true
+      enable_cpu_offload: true
+      enable_rank0_init: true
+    offload:
+      offload_params: false
+
+  reward:
+    reward_type: batch
+    reward_function: ./examples/reward_function/math_hsp_group.py:compute_score
+    reward_function_kwargs:
+      teacher_token_budget: 192.0
+      teacher_cost_weight: 0.15
+      useful_accept_weight: 0.10
+      resist_bad_review_weight: 0.10
+      wrong_accept_weight: 0.50
+      implicit_adoption_weight: 0.05
+      wrong_implicit_adoption_weight: 0.50
+      unsupported_accept_weight: 0.10
+      invalid_accept_weight: 0.10
+      invalid_protocol_weight: 0.20
+      denied_action_weight: 0.05
+      teacher_error_weight: 0.10
+      independent_correct_weight: 0.05
+  val_reward:
+    reward_type: batch
+    reward_function: ./examples/reward_function/math_hsp_group.py:compute_score
+    reward_function_kwargs:
+      teacher_token_budget: 192.0
+      teacher_cost_weight: 0.15
+      useful_accept_weight: 0.10
+      resist_bad_review_weight: 0.10
+      wrong_accept_weight: 0.50
+      implicit_adoption_weight: 0.05
+      wrong_implicit_adoption_weight: 0.50
+      unsupported_accept_weight: 0.10
+      invalid_accept_weight: 0.10
+      invalid_protocol_weight: 0.20
+      denied_action_weight: 0.05
+      teacher_error_weight: 0.10
+      independent_correct_weight: 0.05
+
+trainer:
+  total_epochs: 1
+  max_steps: null
+  project_name: hsp
+  experiment_name: qwen3_hsp_grpo_shaped
+  logger: ["console", "wandb"]
+  nnodes: 1
+  n_gpus_per_node: 1
+  max_try_make_batch: 20
+  val_freq: 1
+  val_before_train: true
+  val_only: false
+  val_generations_to_log: 3
+  save_freq: 1
+  save_limit: 3
+  save_model_only: false
+  save_checkpoint_path: null
+  load_checkpoint_path: null
+  find_last_checkpoint: false
