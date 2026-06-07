@@ -868,7 +868,7 @@ Help-Seeking Policies for Small-Large Model Collaborative Reasoning
 | 阶段 | 当前文件 | 当前行为 | HSP 是否复用 |
 | --- | --- | --- | --- |
 | SFT 数据构造 | `SFT_stage/add_command_upload.py` | 在普通 answer 中随机插入 0 到 3 个 `<call></call>` | 保留作 RelayLLM baseline，新增 HSP 构造器 |
-| SFT 训练 | `SFT_stage/train.py` | 单轮 user / assistant SFT，只 mask 第一段 user prompt | 不能直接承担多段 teacher context，需新增 HSP trainer/collator |
+| SFT 训练 | `SFT_stage/train_hsp.py` / `SFT_stage/hsp_collator.py` | 多段 HSP transcript 训练，teacher observation 只作为上下文，student span 进入 loss | 已新增 HSP trainer/collator，保留原 `train.py` 作为普通 baseline |
 | RL 题库准备 | `RL_stage/data_filter.py` | 用 teacher 对数学问题采样，保留 teacher 至少一次答对的问题 | 可复用为在线 RL 题库过滤 |
 | RL 数据装载 | `RL_stage/verl/utils/dataset.py` | 读取 `problem` / `answer`，生成 prompt 和 ground truth | 小改，保持 question + gold 的 RL 数据形式 |
 | 协作 rollout | `RL_stage/verl/workers/rollout/help_vllm_rollout_spmd.py` | 检测 `<call>N</call>`，请求 teacher 续写 | HSP 主改造点 |
@@ -1727,7 +1727,7 @@ teacher_context_tokens / feedback_truncated  # teacher 成本与实际注入上�
 先在一张或多张供 teacher 使用的 GPU 上启动现有服务：
 
 ```bash
-cd /Users/quanquan/Desktop/InfoBuy
+cd /path/to/InfoBuy
 python utils/vllm_service.py \
   --model_path ${INFOBUY_TEACHER_MODELS}/qwen3-8b-main \
   --port 7778 \
@@ -1738,7 +1738,7 @@ python utils/vllm_service.py \
 单个数据集的 HSP 评估：
 
 ```bash
-cd /Users/quanquan/Desktop/InfoBuy
+cd /path/to/InfoBuy
 python -m eval.generate_withhelp \
   --small_model ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft \
   --dataset math \
@@ -1754,7 +1754,7 @@ python -m eval.generate_withhelp \
 批量运行仓库既有任务集合：
 
 ```bash
-cd /Users/quanquan/Desktop/InfoBuy
+cd /path/to/InfoBuy
 bash eval/evaluate_forhelp.bash ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft teacher_name 7778 "0 1" hsp 8
 ```
 
@@ -1763,7 +1763,7 @@ bash eval/evaluate_forhelp.bash ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft teacher_n
 为了给 replay selection 提供没有被当前策略探索到的动作候选，在一个训练数据集上采集四类同题轨迹：
 
 ```bash
-cd /Users/quanquan/Desktop/InfoBuy
+cd /path/to/InfoBuy
 bash eval/collect_hsp_candidates.bash \
   ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft local_json teacher_name 7778 8 \
   --name ${INFOBUY_GENERATED_DATA}/raw/numinamath_cot_synthetic_math_train_pilot_v1_800.jsonl \
@@ -1826,7 +1826,7 @@ ${INFOBUY_GENERATED_DATA}/replay/                         # 后续真实 student
 `SFT_stage/fetch_hsp_source_dataset.py` 通过 Hugging Face Dataset Viewer 分页读取源题，保留题目级 provenance，并对 API 限流执行等待重试。实际生成命令为：
 
 ```bash
-cd /Users/quanquan/Desktop/InfoBuy
+cd /path/to/InfoBuy
 python -m SFT_stage.fetch_hsp_source_dataset \
   --max_records 1000 \
   --request_interval_seconds 2 \
@@ -1921,7 +1921,7 @@ python -m SFT_stage.fetch_hsp_source_dataset \
 生成结构化 cold-start 数据：
 
 ```bash
-cd /Users/quanquan/Desktop/InfoBuy
+cd /path/to/InfoBuy
 python -m SFT_stage.build_hsp_sft \
   --input ${INFOBUY_GENERATED_DATA}/raw/numinamath_cot_synthetic_math_train_pilot_v1_800.jsonl \
   --output ${INFOBUY_GENERATED_DATA}/protocol/hsp_protocol_train_pilot_v1.jsonl \
@@ -2006,7 +2006,7 @@ Replay 数据只会复现采样阶段实际出现且成功的动作，因此应�
 RL 训练使用独立配置，保留 RelayLLM baseline 配置不变。teacher 服务启动方式与评估一致，然后在 `RL_stage` 目录执行：
 
 ```bash
-cd /Users/quanquan/Desktop/InfoBuy/RL_stage
+cd /path/to/InfoBuy/RL_stage
 MODEL_PATH=${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft \
 SAVE_PATH=${INFOBUY_CKPT}/rl/qwen3_hsp_grpo_main \
 bash examples/qwen3_hsp_grpo.sh
@@ -2015,7 +2015,7 @@ bash examples/qwen3_hsp_grpo.sh
 该命令默认运行主奖励。运行 shaped 消融时显式设置不同配置与输出目录：
 
 ```bash
-cd /Users/quanquan/Desktop/InfoBuy/RL_stage
+cd /path/to/InfoBuy/RL_stage
 HSP_CONFIG=examples/config_hsp_shaped.yaml \
 MODEL_PATH=${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft \
 SAVE_PATH=${INFOBUY_CKPT}/rl/qwen3_hsp_grpo_shaped \

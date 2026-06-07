@@ -14,6 +14,7 @@ MAIN_REWARD_KWARGS = {
     "useful_accept_weight": 0.0,
     "resist_bad_review_weight": 0.0,
     "wrong_accept_weight": 0.50,
+    "wrong_reject_weight": 0.50,
     "implicit_adoption_weight": 0.05,
     "wrong_implicit_adoption_weight": 0.50,
     "unsupported_accept_weight": 0.10,

@@ -233,6 +233,29 @@ bash RL_stage/examples/qwen3_hsp_grpo.sh
 
 The launcher runs `SFT_stage/preflight_hsp.py` before training. It checks tokenizer tokens, SFT/RL length contract, GRPO config, response budget, and explicit reward weights.
 
+## 6b. Smoke Before Full Runs
+
+Always build and validate a tiny local slice before full GRPO:
+
+```bash
+bash experiments/run_hsp_smoke.sh
+```
+
+To run a 2-step GRPO smoke on a GPU machine with the teacher service already running:
+
+```bash
+RUN_RL=1 bash experiments/run_hsp_smoke.sh
+```
+
+Then run the full main and shaped runs:
+
+```bash
+bash experiments/run_hsp_experiment.sh main
+bash experiments/run_hsp_experiment.sh shaped
+```
+
+Required ablations and sweeps are listed in `experiments/hsp_experiment_matrix.md`.
+
 ## 7. Local Tests
 
 Run deterministic HSP tests that do not need GPU:

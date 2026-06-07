@@ -54,6 +54,17 @@ class MathHSPRewardTest(unittest.TestCase):
         self.assertEqual(score["wrong_accept_count"], 1.0)
         self.assertLess(score["overall"], score["accuracy"])
 
+    def test_wrong_reject_is_penalized(self):
+        event = {
+            "action": "verify",
+            "accepted": False,
+            "student_before_feedback": "Tentative \\boxed{41}. <VERIFY>",
+            "teacher_context_text": "Suggested answer: \\boxed{42}",
+        }
+        score = MODULE.compute_score([self.input("Still wrong \\boxed{41}", [event], verify_count=1)])[0]
+        self.assertEqual(score["wrong_reject_count"], 1.0)
+        self.assertLess(score["overall"], score["accuracy"])
+
     def test_useful_accept_is_recognized_without_teacher_text_in_response(self):
         event = {
             "action": "verify",
@@ -83,6 +94,7 @@ class MathHSPRewardTest(unittest.TestCase):
         }
         score = MODULE.compute_score([self.input("Corrected \\boxed{42}", [event], verify_count=1)])[0]
         self.assertEqual(score["implicit_adoption_without_accept_count"], 1.0)
+        self.assertEqual(score["wrong_reject_count"], 0.0)
         self.assertLess(score["overall"], score["accuracy"])
 
     def test_wrong_implicit_adoption_is_penalized(self):

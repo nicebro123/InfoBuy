@@ -36,20 +36,37 @@ from collections import Counter
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent
-DATA_DIR = REPO_ROOT / "data" / "hsp"
-RAW_DIR = DATA_DIR / "raw"
-PROTOCOL_DIR = DATA_DIR / "protocol"
-MANIFEST_DIR = DATA_DIR / "manifests"
-FLAT_DIR = DATA_DIR / "flat"  # RelayLLM-compatible flat format
 
-# Default file paths
-DEFAULT_TRAIN_RAW = RAW_DIR / "numinamath_cot_synthetic_math_train_pilot_v1_800.jsonl"
-DEFAULT_VAL_RAW = RAW_DIR / "numinamath_cot_synthetic_math_validation_pilot_v1_200.jsonl"
-DEFAULT_SPLIT_MANIFEST = MANIFEST_DIR / "numinamath_cot_synthetic_math_split_pilot_v1.manifest.json"
-DEFAULT_TRAIN_PROTOCOL = PROTOCOL_DIR / "hsp_protocol_train_pilot_v1.jsonl"
-DEFAULT_VAL_PROTOCOL = PROTOCOL_DIR / "hsp_protocol_validation_pilot_v1.jsonl"
-DEFAULT_TRAIN_FLAT = FLAT_DIR / "hsp_sft_train.jsonl"
-DEFAULT_VAL_FLAT = FLAT_DIR / "hsp_sft_validation.jsonl"
+
+def default_generated_data_dir() -> Path:
+    configured = os.environ.get("INFOBUY_GENERATED_DATA") or os.environ.get("HSP_GENERATED_DATA")
+    if configured:
+        return Path(configured).expanduser()
+    store_root = Path(os.environ.get("INFOBUY_STORE", REPO_ROOT.parent / "InfoBuy_store")).expanduser()
+    return store_root / "datasets" / "infobuy"
+
+
+def configure_data_dir(data_dir: str | Path) -> None:
+    global DATA_DIR, RAW_DIR, PROTOCOL_DIR, MANIFEST_DIR, FLAT_DIR
+    global DEFAULT_TRAIN_RAW, DEFAULT_VAL_RAW, DEFAULT_SPLIT_MANIFEST
+    global DEFAULT_TRAIN_PROTOCOL, DEFAULT_VAL_PROTOCOL, DEFAULT_TRAIN_FLAT, DEFAULT_VAL_FLAT
+
+    DATA_DIR = Path(data_dir).expanduser()
+    RAW_DIR = DATA_DIR / "raw"
+    PROTOCOL_DIR = DATA_DIR / "protocol"
+    MANIFEST_DIR = DATA_DIR / "manifests"
+    FLAT_DIR = DATA_DIR / "flat"  # RelayLLM-compatible flat format
+
+    DEFAULT_TRAIN_RAW = RAW_DIR / "numinamath_cot_synthetic_math_train_pilot_v1_800.jsonl"
+    DEFAULT_VAL_RAW = RAW_DIR / "numinamath_cot_synthetic_math_validation_pilot_v1_200.jsonl"
+    DEFAULT_SPLIT_MANIFEST = MANIFEST_DIR / "numinamath_cot_synthetic_math_split_pilot_v1.manifest.json"
+    DEFAULT_TRAIN_PROTOCOL = PROTOCOL_DIR / "hsp_protocol_train_pilot_v1.jsonl"
+    DEFAULT_VAL_PROTOCOL = PROTOCOL_DIR / "hsp_protocol_validation_pilot_v1.jsonl"
+    DEFAULT_TRAIN_FLAT = FLAT_DIR / "hsp_sft_train.jsonl"
+    DEFAULT_VAL_FLAT = FLAT_DIR / "hsp_sft_validation.jsonl"
+
+
+configure_data_dir(default_generated_data_dir())
 
 
 def run_command(cmd: list[str], description: str) -> None:
@@ -559,6 +576,8 @@ def parse_args() -> argparse.Namespace:
                         help="HuggingFace repo ID, e.g. 'username/hsp-protocol-sft'.")
     parser.add_argument("--private", action="store_true",
                         help="Create private HuggingFace dataset.")
+    parser.add_argument("--data_dir", type=str, default=str(default_generated_data_dir()),
+                        help="Generated data root. Defaults to $INFOBUY_GENERATED_DATA.")
 
     parser.add_argument("--max_source_records", type=int, default=1000,
                         help="Number of source problems to fetch (default: 1000).")
@@ -588,6 +607,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    configure_data_dir(args.data_dir)
 
     if not args.build_only and not args.upload_only and args.hf_repo_id is None:
         print("ERROR: --hf_repo_id is required unless using --build_only.")
@@ -607,6 +627,7 @@ def main() -> None:
         print(f"  Source records:  {args.max_source_records}")
         print(f"  Train size:     {args.train_size}")
         print(f"  Val size:       {args.val_size}")
+        print(f"  Data dir:       {DATA_DIR}")
         print(f"  Seed:           {args.seed}")
         print(f"  Force rebuild:  {args.force}")
         print(f"  Calibrate:      {args.calibrate}"

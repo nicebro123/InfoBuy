@@ -71,7 +71,8 @@ $INFOBUY_STORE/
 
 ```bash
 # 1. Choose your external storage root.
-export INFOBUY_STORE=/Users/quanquan/Desktop/InfoBuy_store
+# Optional: if unset, setup/env.sh defaults to ../InfoBuy_store beside the repo.
+export INFOBUY_STORE=$HOME/InfoBuy_store
 
 # 2. Load path variables.
 source setup/env.sh

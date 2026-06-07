@@ -793,6 +793,11 @@ def main(args):
     
     handler = datasets_loader.get_dataset_handler(args.dataset, args.name)
     base_questions, base_answers = handler.load_data()
+    if args.max_examples is not None:
+        if args.max_examples <= 0:
+            raise ValueError("--max_examples must be positive when supplied.")
+        base_questions = base_questions[: args.max_examples]
+        base_answers = base_answers[: args.max_examples]
     if args.samples_per_question <= 0:
         raise ValueError("--samples_per_question must be positive.")
     questions = []
@@ -923,6 +928,7 @@ def main(args):
             'larger_model': args.larger_model,
             'interaction_policy': args.interaction_policy,
             'collection_mode': args.collection_mode if args.interaction_policy == "hsp" else None,
+            'max_examples': args.max_examples,
             'samples_per_question': args.samples_per_question,
             'real_call_tokens': larger_model_tokens,
             'total_tokens': total_tokens,
@@ -949,6 +955,7 @@ if __name__ == "__main__":
     parser.add_argument("--student_temperature", type=float, default=0.7)
     parser.add_argument("--teacher_help_temperature", type=float, default=0.7)
     parser.add_argument("--teacher_review_temperature", type=float, default=0.0)
+    parser.add_argument("--max_examples", type=int, default=None, help="Limit dataset questions for smoke tests.")
     parser.add_argument("--samples_per_question", type=int, default=1)
     parser.add_argument("--output_tag", type=str, default=None)
     parser.add_argument("--overwrite_results", action="store_true")
