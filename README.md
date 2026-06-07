@@ -1,81 +1,552 @@
 # InfoBuy
 
-InfoBuy studies small-large model collaborative reasoning as an information
-purchase problem: the small model learns when to buy a hint, when to buy
-verification, how many teacher tokens to buy, and whether to trust the purchased
-information.
-
-The implementation still uses the HSP protocol internally:
+InfoBuy studies small-large model collaborative reasoning as an
+information-buying problem. The student model learns:
 
 ```text
-<ASK>N</ASK>       buy bounded reasoning help
-<VERIFY>N</VERIFY> buy bounded verification
-<ACCEPT>           explicitly trust/adopt verified feedback
+when to buy help
+when to buy verification
+how many teacher tokens to buy
+whether to trust the teacher after verification
 ```
+
+The current protocol is:
+
+```text
+<ASK>N</ASK>        buy bounded reasoning help
+<VERIFY>N</VERIFY>  buy bounded verification
+<ACCEPT>            explicitly accept verified feedback
+```
+
+This README is the reproducibility entry point. Detailed design notes are in
+[`README_HSP.md`](README_HSP.md) and [`docs/hsp/`](docs/hsp/).
 
 ## Repository Layout
 
 ```text
 InfoBuy/
-├── SFT_stage/          protocol SFT data builders, collator, trainer, preflight
-├── RL_stage/           GRPO config, HSP rollout state machine, reward function
-├── eval/               collaborative generation and benchmark evaluation
-├── setup/              external storage, download, and environment scripts
-├── docs/hsp/           detailed method, data, reward, and training docs
-├── utils/              teacher service utilities
-└── README_HSP.md       detailed end-to-end technical manual
+├── SFT_stage/      dataset builders, HSP collator, SFT trainer, preflight checks
+├── RL_stage/       GRPO configs, HSP rollout state machine, reward function
+├── eval/           HSP generation, benchmark evaluation, result recheck
+├── experiments/    smoke tests, main runs, ablation launchers
+├── setup/          external storage and download scripts
+├── docs/hsp/       method, data, reward, training, storage docs
+└── utils/          vLLM teacher service
 ```
 
-Large files do not belong in this repository.
+Large files do not belong in this repository. Model weights, datasets,
+checkpoints, logs, and evaluation outputs all live under an external store.
 
-## External Store Layout
+## 1. Environment Setup
 
-Use one external directory for models, datasets, checkpoints, logs, and
-evaluation outputs:
+Clone the repository and install dependencies:
 
 ```bash
-# Optional: choose a large external disk. If unset, setup/env.sh defaults to
-# a sibling directory next to the repo, such as ../InfoBuy_store.
+git clone https://github.com/nicebro123/InfoBuy.git
+cd InfoBuy
+
+python -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -r requirements.txt
+```
+
+Configure the external store. If `INFOBUY_STORE` is not set, `setup/env.sh`
+defaults to a sibling directory such as `../InfoBuy_store`.
+
+```bash
+# Optional: choose a large disk explicitly.
 export INFOBUY_STORE=$HOME/InfoBuy_store
+
 source setup/env.sh
 bash setup/make_dirs.sh
 ```
 
-The store is organized as:
+Important paths after sourcing `setup/env.sh`:
 
 ```text
-$INFOBUY_STORE/
-├── huggingface/        HF cache, hub cache, dataset cache
-├── models/             pretrained student/teacher weights and aliases
-├── datasets/           HF snapshots, benchmarks, generated InfoBuy data
-├── checkpoints/        SFT, RL, merged, intermediate checkpoints
-├── eval/               generation outputs, rechecked results, summaries
-├── logs/               SFT/RL/vLLM/eval/W&B logs
-├── services/           teacher/student service runtime files
-├── backups/            historical local data backups moved out of the repo
-└── tmp/                downloads, extraction, debug scratch
+$INFOBUY_STORE                 external root
+$INFOBUY_PRETRAINED_MODELS     downloaded base model weights
+$INFOBUY_TEACHER_MODELS        teacher aliases used by vLLM service
+$INFOBUY_GENERATED_DATA        generated InfoBuy datasets
+$INFOBUY_CKPT                  SFT, RL, and merged checkpoints
+$STORAGE_PATH                  evaluation outputs
+$HF_HOME                       Hugging Face cache on external store
 ```
 
-Detailed storage rules are in
-[`docs/hsp/storage_layout.md`](docs/hsp/storage_layout.md).
+Do not commit anything from `$INFOBUY_STORE`.
 
-## Main Data Location
+## 2. Download Model Weights
 
-The main generated data lives outside the repo:
+The default reproduction uses:
 
 ```text
-$INFOBUY_GENERATED_DATA = $INFOBUY_STORE/datasets/infobuy
+student base: Qwen/Qwen3-0.6B
+teacher:      Qwen/Qwen3-8B
+optional:     Qwen/Qwen3-14B-Base
 ```
 
-Current main training files:
+Download the student and teacher weights:
+
+```bash
+source setup/env.sh
+bash setup/download_models.sh
+```
+
+This creates:
 
 ```text
+$INFOBUY_PRETRAINED_MODELS/Qwen3-0.6B
+$INFOBUY_PRETRAINED_MODELS/Qwen3-8B
+$INFOBUY_TEACHER_MODELS/qwen3-8b-main -> ../pretrained/Qwen3-8B
+```
+
+To also download the optional stronger teacher:
+
+```bash
+DOWNLOAD_OPTIONAL_TEACHERS=1 bash setup/download_models.sh
+```
+
+If Hugging Face access is required in your environment, run `hf auth login`
+before downloading.
+
+## 3. Download Reference Datasets
+
+Download immutable source snapshots and cache evaluation datasets:
+
+```bash
+source setup/env.sh
+bash setup/download_data.sh
+```
+
+Main source dataset:
+
+```text
+AI-MO/NuminaMath-CoT
+```
+
+Evaluation datasets cached or downloaded by the script:
+
+```text
+MATH-500 CSV
+openai/gsm8k
+zwhe99/amc23
+zwhe99/simplerl-minerva-math
+zwhe99/simplerl-OlympiadBench
+HuggingFaceH4/aime_2024
+yentinglin/aime_2025
+```
+
+DAPO is not part of the main InfoBuy training pipeline. Download it only for
+optional RelayLLM baseline or ablation experiments:
+
+```bash
+DOWNLOAD_DAPO_BASELINES=1 bash setup/download_data.sh
+```
+
+## 4. Build The HSP Dataset
+
+The main training source is a decontaminated NuminaMath-CoT `synthetic_math`
+pilot split. The protocol SFT data teaches the model the six behaviors needed
+for information buying:
+
+```text
+normal
+ask_help
+verify_confirm
+verify_accept_correction
+verify_reject_bad_feedback
+verify_uncertain
+```
+
+Build the default pilot dataset:
+
+```bash
+source setup/env.sh
+
+python build_and_upload_hsp_dataset.py \
+  --build_only \
+  --max_source_records 1000 \
+  --train_size 800 \
+  --val_size 200 \
+  --seed 42
+```
+
+Expected outputs:
+
+```text
+$INFOBUY_GENERATED_DATA/raw/numinamath_cot_synthetic_math_seed_v0_1000.jsonl
 $INFOBUY_GENERATED_DATA/raw/numinamath_cot_synthetic_math_train_pilot_v1_800.jsonl
 $INFOBUY_GENERATED_DATA/raw/numinamath_cot_synthetic_math_validation_pilot_v1_200.jsonl
 $INFOBUY_GENERATED_DATA/protocol/hsp_protocol_train_pilot_v1.jsonl
 $INFOBUY_GENERATED_DATA/protocol/hsp_protocol_validation_pilot_v1.jsonl
+$INFOBUY_GENERATED_DATA/manifests/*.json
 ```
 
-`setup/link_data.sh` is only a legacy bridge for older commands that require
-`data/...` paths. The preferred setup does not require a `data` directory inside
-the code repository.
+Optional difficulty calibration needs a GPU and a reference model:
+
+```bash
+python build_and_upload_hsp_dataset.py \
+  --build_only \
+  --calibrate \
+  --calibration_model ${INFOBUY_TEACHER_MODELS}/qwen3-8b-main
+```
+
+Validate the generated protocol data:
+
+```bash
+python -m SFT_stage.preflight_hsp \
+  --dataset ${INFOBUY_GENERATED_DATA}/protocol/hsp_protocol_train_pilot_v1.jsonl \
+  --require_all_types \
+  --require_context_tokens
+
+python -m SFT_stage.preflight_hsp \
+  --dataset ${INFOBUY_GENERATED_DATA}/protocol/hsp_protocol_validation_pilot_v1.jsonl \
+  --require_all_types \
+  --require_context_tokens
+```
+
+## 5. Run A Small Smoke Test First
+
+Before full SFT or RL, run the lightweight smoke script. It builds a tiny local
+slice and validates the protocol. If the pilot data is missing, it falls back to
+the small test fixture.
+
+```bash
+source setup/env.sh
+bash experiments/run_hsp_smoke.sh
+```
+
+To also run a 2-step SFT smoke:
+
+```bash
+RUN_SFT=1 \
+SFT_MODEL_NAME=${INFOBUY_PRETRAINED_MODELS}/Qwen3-0.6B \
+bash experiments/run_hsp_smoke.sh
+```
+
+To run the 2-step RL smoke, first start the teacher service on port `7778`
+(section 7), then run:
+
+```bash
+RUN_RL=1 bash experiments/run_hsp_smoke.sh
+```
+
+## 6. Train The Student With SFT
+
+SFT is the protocol warm-up stage. It teaches the student to use `<ASK>`,
+`<VERIFY>`, and `<ACCEPT>` with teacher observations as context. Teacher tokens
+are visible to the model but masked out of the training loss.
+
+```bash
+source setup/env.sh
+
+python -m SFT_stage.train_hsp \
+  --model_name ${INFOBUY_PRETRAINED_MODELS}/Qwen3-0.6B \
+  --dataset ${INFOBUY_GENERATED_DATA}/protocol/hsp_protocol_train_pilot_v1.jsonl \
+  --output_dir ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft \
+  --max_seq_length 12288 \
+  --learning_rate 5e-6 \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 8 \
+  --num_train_epochs 1 \
+  --bf16
+```
+
+Post-SFT compatibility check:
+
+```bash
+python -m SFT_stage.preflight_hsp \
+  --model_path ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft \
+  --rl_config RL_stage/examples/config_hsp.yaml \
+  --require_context_tokens
+```
+
+SFT output:
+
+```text
+$INFOBUY_CKPT/sft/qwen3-0.6b-hsp-sft
+```
+
+## 7. Start The Teacher Service
+
+The teacher service answers HSP `<ASK>` and `<VERIFY>` calls during evaluation
+and RL rollout.
+
+```bash
+source setup/env.sh
+
+CUDA_VISIBLE_DEVICES=1 python utils/vllm_service.py \
+  --model_path ${INFOBUY_TEACHER_MODELS}/qwen3-8b-main \
+  --port 7778 \
+  --tensor_parallel_size 1 \
+  --trust_remote_code
+```
+
+Quick service check:
+
+```bash
+curl -s http://127.0.0.1:7778/generate \
+  -H "Content-Type: application/json" \
+  -d '[{"prompt": "What is 2+2?", "max_tokens": 32}]'
+```
+
+Keep this service running while using HSP evaluation or RL.
+
+## 8. Evaluate The SFT Model
+
+For deterministic local checks without external LLM recheck:
+
+```bash
+export SKIP_LLM_RECHECK=1
+```
+
+Single-dataset evaluation:
+
+```bash
+python -m eval.generate_withhelp \
+  --small_model ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft \
+  --dataset math \
+  --larger_model Qwen3-8B \
+  --large_model_url http://127.0.0.1:7778/generate \
+  --interaction_policy hsp \
+  --max_interactions 3 \
+  --ask_budget_tokens 64 \
+  --verify_budget_tokens 96 \
+  --samples_per_question 8
+```
+
+Small batch benchmark smoke:
+
+```bash
+EVAL_TASKS="math gsm8k" \
+MAX_EXAMPLES=10 \
+OUTPUT_TAG=smoke \
+SKIP_LLM_RECHECK=1 \
+bash eval/evaluate_forhelp.bash \
+  ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft \
+  Qwen3-8B \
+  7778 \
+  "0" \
+  hsp \
+  2
+```
+
+Full batch evaluation:
+
+```bash
+bash eval/evaluate_forhelp.bash \
+  ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft \
+  Qwen3-8B \
+  7778 \
+  "0 1" \
+  hsp \
+  8
+```
+
+Evaluation outputs are written under:
+
+```text
+$STORAGE_PATH/evaluation/
+$STORAGE_PATH/summaries/
+```
+
+Summarize HSP action behavior:
+
+```bash
+python -m eval.summarize_hsp_results \
+  ${STORAGE_PATH}/evaluation/*/results_math_*_hsp_rechecked.json \
+  ${STORAGE_PATH}/evaluation/*/results_gsm8k_*_hsp_rechecked.json \
+  --output ${STORAGE_PATH}/summaries/hsp_action_summary.json
+```
+
+## 9. Optional Outcome Replay SFT
+
+Outcome replay collects actual HSP rollouts, selects successful low-cost
+trajectories, and mixes them back into the protocol SFT data.
+
+Collect candidates from training data only:
+
+```bash
+bash eval/collect_hsp_candidates.bash \
+  ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft \
+  local_json \
+  Qwen3-8B \
+  7778 \
+  8 \
+  --name ${INFOBUY_GENERATED_DATA}/raw/numinamath_cot_synthetic_math_train_pilot_v1_800.jsonl \
+  --output_tag pilot_r1 \
+  --max_interactions 3 \
+  --ask_budget_tokens 64 \
+  --verify_budget_tokens 96
+```
+
+Build and mix replay data:
+
+```bash
+python -m SFT_stage.build_hsp_outcome_sft \
+  --input \
+    ${STORAGE_PATH}/evaluation/*/results_local_json_*_pilot_r1_hsp.json \
+    ${STORAGE_PATH}/evaluation/*/results_local_json_*_pilot_r1_hsp_independent.json \
+    ${STORAGE_PATH}/evaluation/*/results_local_json_*_pilot_r1_hsp_force_ask_first.json \
+    ${STORAGE_PATH}/evaluation/*/results_local_json_*_pilot_r1_hsp_force_verify_after_draft.json \
+  --output ${INFOBUY_GENERATED_DATA}/replay/hsp_outcome_replay_pilot_r1.jsonl \
+  --teacher_token_budget 192 \
+  --teacher_cost_weight 0.15 \
+  --min_score 1.0
+
+python -m SFT_stage.mix_hsp_sft \
+  --protocol_data ${INFOBUY_GENERATED_DATA}/protocol/hsp_protocol_train_pilot_v1.jsonl \
+  --replay_data ${INFOBUY_GENERATED_DATA}/replay/hsp_outcome_replay_pilot_r1.jsonl \
+  --output ${INFOBUY_GENERATED_DATA}/replay/hsp_sft_mixed_pilot_r1.jsonl \
+  --max_replay_fraction 0.50
+```
+
+Then rerun SFT with the mixed dataset if you want a stronger warm-up.
+
+## 10. Train With GRPO RL
+
+RL learns the information-buying policy: when to ask, when to verify, how much
+teacher budget to spend, and whether to accept feedback.
+
+Make sure the teacher service from section 7 is still running.
+
+Smoke RL:
+
+```bash
+RUN_RL=1 bash experiments/run_hsp_smoke.sh
+```
+
+Main RL run:
+
+```bash
+bash experiments/run_hsp_experiment.sh main
+```
+
+Shaped reward ablation:
+
+```bash
+bash experiments/run_hsp_experiment.sh shaped
+```
+
+Other ablations and sweeps:
+
+```bash
+bash experiments/run_hsp_experiment.sh no_cost
+bash experiments/run_hsp_experiment.sh cost_low
+bash experiments/run_hsp_experiment.sh cost_high
+bash experiments/run_hsp_experiment.sh trust_low
+bash experiments/run_hsp_experiment.sh trust_high
+bash experiments/run_hsp_experiment.sh budget_small
+bash experiments/run_hsp_experiment.sh budget_large
+```
+
+The experiment matrix is documented in
+[`experiments/hsp_experiment_matrix.md`](experiments/hsp_experiment_matrix.md).
+
+Main RL checkpoints are saved under:
+
+```text
+$INFOBUY_CKPT/rl/qwen3_hsp_grpo_main
+```
+
+## 11. Merge And Evaluate RL Checkpoints
+
+GRPO checkpoints are FSDP shards. Merge the actor checkpoint into Hugging Face
+format before final evaluation:
+
+```bash
+python RL_stage/scripts/model_merger.py \
+  --local_dir ${INFOBUY_CKPT}/rl/qwen3_hsp_grpo_main/actor
+```
+
+Merged model path:
+
+```text
+$INFOBUY_CKPT/rl/qwen3_hsp_grpo_main/actor/huggingface
+```
+
+Final evaluation:
+
+```bash
+MERGED_MODEL=${INFOBUY_CKPT}/rl/qwen3_hsp_grpo_main/actor/huggingface
+
+bash eval/evaluate_forhelp.bash \
+  ${MERGED_MODEL} \
+  Qwen3-8B \
+  7778 \
+  "0 1" \
+  hsp \
+  8
+```
+
+## 12. Recommended Reproduction Order
+
+Use this order for a clean run:
+
+```text
+1. source setup/env.sh && bash setup/make_dirs.sh
+2. bash setup/download_models.sh
+3. bash setup/download_data.sh
+4. python build_and_upload_hsp_dataset.py --build_only
+5. bash experiments/run_hsp_smoke.sh
+6. python -m SFT_stage.train_hsp ...
+7. start utils/vllm_service.py on port 7778
+8. run SFT evaluation with eval/evaluate_forhelp.bash
+9. optional outcome replay SFT
+10. RUN_RL=1 bash experiments/run_hsp_smoke.sh
+11. bash experiments/run_hsp_experiment.sh main
+12. merge RL actor checkpoint
+13. run final evaluation and summarize results
+```
+
+## 13. Local Checks
+
+Run these before committing or pushing:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s . -p 'test*.py'
+
+bash -n \
+  setup/env.sh \
+  setup/make_dirs.sh \
+  setup/link_data.sh \
+  setup/download_models.sh \
+  setup/download_data.sh \
+  experiments/run_hsp_smoke.sh \
+  experiments/run_hsp_experiment.sh \
+  eval/evaluate_forhelp.bash \
+  RL_stage/examples/qwen3_hsp_grpo.sh
+
+git diff --check
+```
+
+## 14. Troubleshooting
+
+If `torch`, `vllm`, or `ray` is missing, install `requirements.txt` inside the
+active environment.
+
+If Hugging Face downloads fail, check:
+
+```bash
+hf auth login
+echo $HF_HOME
+echo $HF_HUB_CACHE
+```
+
+If evaluation says `OPENAI_API_KEY` is required, either set the key or run
+deterministic-only checks:
+
+```bash
+export SKIP_LLM_RECHECK=1
+```
+
+If a script looks for `data/...` inside the repository, prefer updating the
+script to use `$INFOBUY_GENERATED_DATA`. The compatibility bridge is:
+
+```bash
+bash setup/link_data.sh
+```
+
+This creates a local `data -> $INFOBUY_STORE/datasets` symlink, but it is not
+required for the main pipeline.
