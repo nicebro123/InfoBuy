@@ -20,13 +20,37 @@ env/
 /data
 InfoBuy_store/
 hsp_store/
+*_store/
 backups/
 store/
 models/
 checkpoints/
 datasets/
 hf_cache/
+cache/
+.cache/
 inference_results/
+outputs/
+output/
+runs/
+logs/
+wandb/
+tmp/
+artifacts/
+
+# Large model/checkpoint/data artifacts
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.gguf
+*.bin
+*.arrow
+*.parquet
+*.npy
+*.npz
+*.pkl
 
 # Data artifacts (large; rebuild via build_and_upload_hsp_dataset.py)
 # Uncomment if you do not want to track generated datasets:

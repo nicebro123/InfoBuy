@@ -77,6 +77,7 @@ def compute_score(
     useful_accept_weight: float = 0.0,
     resist_bad_review_weight: float = 0.0,
     wrong_accept_weight: float = 0.50,
+    wrong_reject_weight: float = 0.50,
     implicit_adoption_weight: float = 0.05,
     wrong_implicit_adoption_weight: float = 0.50,
     unsupported_accept_weight: float = 0.10,
@@ -104,6 +105,7 @@ def compute_score(
 
         useful_accepts = 0
         wrong_accepts = 0
+        wrong_rejects = 0
         implicit_adoptions_without_accept = 0
         wrong_implicit_adoptions = 0
         unsupported_accepts = 0
@@ -134,6 +136,14 @@ def compute_score(
                 and accuracy > 0.5
             ):
                 implicit_adoptions_without_accept += 1
+            elif (
+                not accepted
+                and not implicitly_adopted
+                and corrective_answer_correct is True
+                and tentative_correct is not True
+                and accuracy < 0.5
+            ):
+                wrong_rejects += 1
             elif not accepted and correctness is False and accuracy > 0.5:
                 resisted_bad_reviews += 1
 
@@ -150,6 +160,7 @@ def compute_score(
             + independent_bonus
             - teacher_cost_weight * cost_ratio
             - wrong_accept_weight * wrong_accepts
+            - wrong_reject_weight * wrong_rejects
             - implicit_adoption_weight * implicit_adoptions_without_accept
             - wrong_implicit_adoption_weight * wrong_implicit_adoptions
             - unsupported_accept_weight * unsupported_accepts
@@ -168,6 +179,7 @@ def compute_score(
             "accept_count": float(reward_input.get("accept_count", 0)),
             "useful_accept_count": float(useful_accepts),
             "wrong_accept_count": float(wrong_accepts),
+            "wrong_reject_count": float(wrong_rejects),
             "implicit_adoption_without_accept_count": float(implicit_adoptions_without_accept),
             "wrong_implicit_adoption_count": float(wrong_implicit_adoptions),
             "unsupported_accept_count": float(unsupported_accepts),

@@ -35,6 +35,7 @@ HSP_REWARD_WEIGHT_KEYS = (
     "useful_accept_weight",
     "resist_bad_review_weight",
     "wrong_accept_weight",
+    "wrong_reject_weight",
     "implicit_adoption_weight",
     "wrong_implicit_adoption_weight",
     "unsupported_accept_weight",
@@ -341,8 +342,14 @@ def validate_rl_config(config: dict[str, Any], model_override: str | None = None
 def load_rl_config(path: str) -> dict[str, Any]:
     try:
         from omegaconf import OmegaConf
-    except ImportError as error:
-        raise RuntimeError("RL config validation requires omegaconf to be installed.") from error
+    except ImportError:
+        try:
+            import yaml
+        except ImportError as error:
+            raise RuntimeError("RL config validation requires omegaconf or pyyaml to be installed.") from error
+        with Path(path).open("r", encoding="utf-8") as stream:
+            data = yaml.safe_load(stream)
+        return data or {}
     return OmegaConf.to_container(OmegaConf.load(path), resolve=True)
 
 

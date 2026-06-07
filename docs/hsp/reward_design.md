@@ -28,7 +28,7 @@ HSP 的核心是训练学生的信任判断。VERIFY 之后学生的决策和 Te
 | **Student ACCEPT** | useful_accept **(+0.10)** | wrong_accept **(-0.50)** |
 | **Student 不 ACCEPT** | **wrong_reject (-0.50)** | resist_bad_review **(+0.10)** |
 
-**wrong_reject 是当前代码缺失的关键惩罚项**：学生原本答错了，Teacher 给了正确纠正，学生却拒绝接受。这与 `wrong_accept`（盲信错误反馈）对称——两者都是信任判断的严重失误，都应重罚。
+**wrong_reject 是信任矩阵中的关键惩罚项**：学生原本答错了，Teacher 给了正确纠正，学生却拒绝接受。这与 `wrong_accept`（盲信错误反馈）对称——两者都是信任判断的严重失误，都应重罚。
 
 ### 2.2 当前实现（config_hsp_shaped.yaml）
 
@@ -39,7 +39,7 @@ R = accuracy                               # 最终答案正确 +1.0
   + independent_correct × 0.05             # 零交互独立答对
   - teacher_cost × 0.15 × cost_ratio       # Teacher token 成本
   - wrong_accept × 0.50                    # 盲信错误反馈
-  - wrong_reject × 0.50                    # 拒绝正确反馈 ← 缺失！需新增
+  - wrong_reject × 0.50                    # 拒绝正确反馈
   - implicit_adoption × 0.05               # 不用ACCEPT但偷用了Teacher答案
   - wrong_implicit_adoption × 0.50         # 偷用错误答案
   - unsupported_accept × 0.10              # Teacher反馈不明确就ACCEPT
@@ -76,7 +76,7 @@ R = accuracy                               # 最终答案正确 +1.0
 | **有效 ACCEPT** | event.accepted + teacher feedback 正确 + 学生原答案错 + 最终对 | useful_accepts 计数 | +0.10 |
 | **错误 ACCEPT** | event.accepted + teacher feedback 错误 | wrong_accepts 计数 | -0.50 |
 | **拒绝错误反馈** | not accepted + teacher feedback 错误 + 最终对 | resisted_bad_reviews 计数 | +0.10 |
-| **拒绝正确反馈（缺失）** | not accepted + teacher feedback 正确 + 学生原答案错 | wrong_rejects 计数 | **-0.50 应新增** |
+| **拒绝正确反馈** | not accepted + teacher feedback 正确 + 学生原答案错 | wrong_rejects 计数 | **-0.50** |
 | **隐式采纳（无ACCEPT但用了Teacher答案）** | adopted_teacher_answer_without_accept() | implicit_adoptions 计数 | -0.05 |
 | **隐式采纳错误答案** | 同上 + teacher feedback 错误 | wrong_implicit_adoptions 计数 | -0.50 |
 | **无依据 ACCEPT** | accepted + teacher feedback 不明确（uncertain/无答案） | unsupported_accepts 计数 | -0.10 |
@@ -103,9 +103,9 @@ event = {
 
 以下信号可以从已有数据中计算得出，无需修改 rollout 引擎。
 
-#### 信号 A（关键缺失）：拒绝正确反馈 — wrong_reject
+#### 信号 A：拒绝正确反馈 — wrong_reject
 
-与 `wrong_accept` 对称，是信任判断 2×2 矩阵中缺失的象限。当前代码有 `useful_accept`、`wrong_accept`、`resist_bad_review`，但没有对"Teacher 给正确反馈但学生拒绝"的惩罚。
+与 `wrong_accept` 对称，是信任判断 2×2 矩阵中的关键象限。当前实现会对"Teacher 给正确反馈但学生拒绝，并且最终仍然答错"的轨迹施加惩罚。
 
 ```python
 wrong_reject = (
@@ -278,7 +278,7 @@ R = accuracy                              # 基础正确性 +1.0
   + uncertain_independent_correct × w₅   # Teacher不确定+独立答对（新）
   # === 负反馈 — 信任判断失误（惩罚坏行为） ===
   - wrong_accept × w₆                    # 盲信错误反馈
-  - wrong_reject × w₇                    # 拒绝正确反馈 ← 关键缺失！
+  - wrong_reject × w₇                    # 拒绝正确反馈
   # === 负反馈 — 协议/成本 ===
   - teacher_cost × w₈ × cost_ratio       # Teacher token 成本
   - implicit_adoption × w₉               # 不用ACCEPT但偷用Teacher答案
@@ -305,7 +305,7 @@ R = accuracy                              # 基础正确性 +1.0
 | w₄ `independent_correct` | 零交互独立答对 | 0.05 | 核心 |
 | w₅ `uncertain_independent_correct` | Teacher不确定+独立答对 | 0.03 | 可选 |
 | w₆ `wrong_accept` | 盲信错误反馈 | 0.50 | 核心 |
-| **w₇ `wrong_reject`** | **拒绝正确反馈（缺失）** | **0.50** | **核心** |
+| **w₇ `wrong_reject`** | **拒绝正确反馈** | **0.50** | **核心** |
 | w₈ `teacher_cost` | Token成本 | 0.15 | 核心 |
 | w₉ `implicit_adoption` | 隐式采纳 | 0.05 | 核心 |
 | w₁₀ `wrong_implicit_adoption` | 隐式采纳错误答案 | 0.50 | 核心 |
@@ -326,7 +326,7 @@ R = accuracy                              # 基础正确性 +1.0
 - [x] 信任信号（useful_accept, wrong_accept, implicit_adoption）
 - [x] 独立解题信号（independent_correct）
 - [x] 协议合规信号（invalid_accept, invalid_protocol, denied_action）
-- [ ] **wrong_reject（拒绝正确反馈）— 信任 2×2 矩阵缺失象限，优先级最高**
+- [x] **wrong_reject（拒绝正确反馈）— 信任 2×2 矩阵缺失象限，已实现并加入单测**
 
 ### 第二阶段（轻度扩展，不修改 rollout 引擎）
 - [ ] 预算效率信号（budget_waste）— event 中已有 `requested_budget_tokens` 和 `teacher_tokens_used`

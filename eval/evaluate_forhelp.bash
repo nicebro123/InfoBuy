@@ -5,6 +5,7 @@ export VLLM_DISABLE_COMPILE_CACHE=1
 
 if [ "$#" -lt 4 ]; then
   echo "Usage: bash eval/evaluate_forhelp.bash <student_model> <teacher_name> <port> \"<gpu_ids>\" [interaction_policy] [samples_per_question] [collection_mode]" >&2
+  echo "Optional env: EVAL_TASKS=\"math gsm8k\" MAX_EXAMPLES=10 OUTPUT_TAG=smoke SKIP_LLM_RECHECK=1" >&2
   exit 2
 fi
 
@@ -32,6 +33,9 @@ if [ -n "${OUTPUT_TAG:-}" ]; then
   generate_extra_args+=(--output_tag "${OUTPUT_TAG}")
   recheck_extra_args+=(--output_tag "${OUTPUT_TAG}")
 fi
+if [ -n "${MAX_EXAMPLES:-}" ]; then
+  generate_extra_args+=(--max_examples "${MAX_EXAMPLES}")
+fi
 if [ "${SKIP_LLM_RECHECK:-0}" = "1" ]; then
   recheck_extra_args+=(--skip_llm_recheck)
 elif [ -z "${OPENAI_API_KEY:-}" ]; then
@@ -41,14 +45,18 @@ fi
 MODEL_NAMES=(
   "$model_name"
 )
-TASKS=(
-  "math"
-  "gsm8k" 
-  "minerva"
-  "olympiad"
-  "aime2024"
-  "aime2025"
-)
+if [ -n "${EVAL_TASKS:-}" ]; then
+  read -r -a TASKS <<< "${EVAL_TASKS}"
+else
+  TASKS=(
+    "math"
+    "gsm8k"
+    "minerva"
+    "olympiad"
+    "aime2024"
+    "aime2025"
+  )
+fi
 
 echo "Available GPUs: ${GPU_QUEUE[@]}"
 

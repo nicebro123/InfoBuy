@@ -5,8 +5,8 @@
 ## 1. 总体原则
 
 ```text
-/Users/quanquan/Desktop/InfoBuy/        代码仓库，不放大文件
-/Users/quanquan/Desktop/InfoBuy_store/  统一实验存储根目录
+/path/to/InfoBuy/        代码仓库，不放大文件
+/path/to/InfoBuy_store/  统一实验存储根目录
 ```
 
 原则：
@@ -93,8 +93,9 @@ $INFOBUY_STORE/
 统一从仓库根目录加载：
 
 ```bash
-cd /Users/quanquan/Desktop/InfoBuy
-export INFOBUY_STORE=/Users/quanquan/Desktop/InfoBuy_store
+cd /path/to/InfoBuy
+# 可选：如不设置，setup/env.sh 默认使用仓库同级的 ../InfoBuy_store。
+export INFOBUY_STORE=$HOME/InfoBuy_store
 source setup/env.sh
 ```
 

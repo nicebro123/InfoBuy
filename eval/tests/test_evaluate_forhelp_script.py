@@ -69,6 +69,44 @@ class EvaluateForHelpScriptTest(unittest.TestCase):
         self.assertEqual(result.returncode, 7)
         self.assertNotIn("All tasks have finished", result.stdout)
 
+    def test_task_and_example_limits_are_forwarded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bin_dir = Path(directory)
+            call_log = bin_dir / "calls.log"
+            python_stub = bin_dir / "python"
+            python_stub.write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' \"$*\" >> \"$CALL_LOG\"\n"
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            sleep_stub = bin_dir / "sleep"
+            sleep_stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            python_stub.chmod(0o755)
+            sleep_stub.chmod(0o755)
+            env = dict(os.environ)
+            env["PATH"] = f"{bin_dir}:{env['PATH']}"
+            env["CALL_LOG"] = str(call_log)
+            env["SKIP_LLM_RECHECK"] = "1"
+            env["EVAL_TASKS"] = "math"
+            env["MAX_EXAMPLES"] = "2"
+            env["OUTPUT_TAG"] = "smoke"
+            result = subprocess.run(
+                ["bash", str(SCRIPT_PATH), "model", "teacher", "7778", "0", "hsp", "1", "policy"],
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            log_text = call_log.read_text(encoding="utf-8")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("--dataset math", log_text)
+        self.assertIn("--max_examples 2", log_text)
+        self.assertIn("--output_tag smoke", log_text)
+        self.assertNotIn("--dataset gsm8k", log_text)
+
     def test_collection_script_missing_required_arguments_prints_usage(self):
         result = subprocess.run(
             ["bash", str(COLLECT_SCRIPT_PATH)],

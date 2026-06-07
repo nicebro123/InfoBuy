@@ -182,7 +182,8 @@ pip install -r requirements.txt
 
 # Configure external storage for models, HF cache, generated data, checkpoints,
 # and evaluation outputs.
-export INFOBUY_STORE=/Users/quanquan/Desktop/InfoBuy_store
+# Optional: if unset, setup/env.sh defaults to ../InfoBuy_store beside the repo.
+export INFOBUY_STORE=$HOME/InfoBuy_store
 source setup/env.sh
 bash setup/make_dirs.sh
 
@@ -601,6 +602,7 @@ overall = accuracy
         + independent_correct_weight * no_interaction_correct (reward)
         - teacher_cost_weight    * (teacher_tokens / budget)  (cost penalty)
         - wrong_accept_weight    * wrong_accepts              (trust penalty)
+        - wrong_reject_weight    * wrong_rejects              (trust penalty)
         - implicit_adoption_weight * implicit_adoptions       (protocol penalty)
         - wrong_implicit_adoption_weight * wrong_implicit     (trust penalty)
         - unsupported_accept_weight * unsupported_accepts     (trust penalty)
@@ -616,6 +618,7 @@ overall = accuracy
 | accuracy | 1.0 (base) | Correct final answer |
 | teacher_cost | 0.15 | Penalizes excessive teacher token usage |
 | wrong_accept | 0.50 | **Heavy penalty** for accepting incorrect teacher feedback |
+| wrong_reject | 0.50 | **Heavy penalty** for rejecting correct teacher feedback |
 | wrong_implicit_adoption | 0.50 | **Heavy penalty** for silently adopting wrong corrections |
 | invalid_protocol | 0.20 | Penalizes forging environment markers |
 | unsupported_accept | 0.10 | Penalizes accepting when teacher's correction is unverifiable |
@@ -634,6 +637,7 @@ The reward design philosophy: **correct trust is rewarded, misplaced trust is he
 |:----------|:-------------------:|:---------------:|
 | `useful_accept_weight` | 0.0 | 0.10 |
 | `resist_bad_review_weight` | 0.0 | 0.10 |
+| `wrong_reject_weight` | 0.50 | 0.50 |
 | `teacher_error_weight` | 0.0 | 0.10 |
 | `independent_correct_weight` | 0.0 | 0.05 |
 
@@ -687,6 +691,15 @@ bash -n RL_stage/examples/qwen3_hsp_grpo.sh
 bash -n eval/collect_hsp_candidates.bash
 bash -n eval/evaluate_forhelp.bash
 ```
+
+Run the small-data smoke gate before full training:
+
+```bash
+bash experiments/run_hsp_smoke.sh
+RUN_RL=1 bash experiments/run_hsp_smoke.sh
+```
+
+The full experiment matrix is defined in `experiments/hsp_experiment_matrix.md`.
 
 ---
 

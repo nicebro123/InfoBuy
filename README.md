@@ -34,7 +34,9 @@ Use one external directory for models, datasets, checkpoints, logs, and
 evaluation outputs:
 
 ```bash
-export INFOBUY_STORE=/Users/quanquan/Desktop/InfoBuy_store
+# Optional: choose a large external disk. If unset, setup/env.sh defaults to
+# a sibling directory next to the repo, such as ../InfoBuy_store.
+export INFOBUY_STORE=$HOME/InfoBuy_store
 source setup/env.sh
 bash setup/make_dirs.sh
 ```

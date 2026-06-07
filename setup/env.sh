@@ -6,7 +6,19 @@
 # outputs live under $INFOBUY_STORE outside the repo.
 
 # ---- CHANGE THIS to your large disk / mount point if needed ----
-export INFOBUY_STORE="${INFOBUY_STORE:-${HSP_STORE:-/Users/quanquan/Desktop/InfoBuy_store}}"
+# Default to a sibling directory next to the code repo, e.g.:
+#   /path/to/InfoBuy       -> /path/to/InfoBuy_store
+#   /path/to/InfoBuy-main  -> /path/to/InfoBuy-main_store
+if [ -n "${BASH_SOURCE[0]:-}" ]; then
+  _INFOBUY_ENV_FILE="${BASH_SOURCE[0]}"
+else
+  _INFOBUY_ENV_FILE="$0"
+fi
+
+_INFOBUY_ENV_DIR="$(cd "$(dirname "${_INFOBUY_ENV_FILE}")" && pwd)"
+_INFOBUY_REPO_ROOT="$(cd "${_INFOBUY_ENV_DIR}/.." && pwd)"
+_INFOBUY_DEFAULT_STORE="$(dirname "${_INFOBUY_REPO_ROOT}")/$(basename "${_INFOBUY_REPO_ROOT}")_store"
+export INFOBUY_STORE="${INFOBUY_STORE:-${HSP_STORE:-${_INFOBUY_DEFAULT_STORE}}}"
 
 # Backward-compatible alias used by older HSP scripts/docs.
 export HSP_STORE="$INFOBUY_STORE"

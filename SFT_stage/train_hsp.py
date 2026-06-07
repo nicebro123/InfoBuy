@@ -26,7 +26,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset_split", default="train")
     parser.add_argument("--output_dir", default="./results_hsp_0.6B")
     parser.add_argument("--max_seq_length", type=int, default=12288)
+    parser.add_argument("--max_train_samples", type=int, default=None, help="Limit examples for smoke tests.")
     parser.add_argument("--num_train_epochs", type=float, default=1.0)
+    parser.add_argument("--max_steps", type=int, default=-1, help="Override training steps for smoke tests.")
     parser.add_argument("--learning_rate", type=float, default=5e-6)
     parser.add_argument("--per_device_train_batch_size", type=int, default=1)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=8)
@@ -53,6 +55,11 @@ def main() -> None:
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
     dataset = load_structured_dataset(args.dataset, args.dataset_split)
+    if args.max_train_samples is not None:
+        if args.max_train_samples <= 0:
+            raise ValueError("--max_train_samples must be positive when supplied.")
+        dataset = dataset.select(range(min(args.max_train_samples, len(dataset))))
+
     protocol_report = validate_dataset(dataset)
     if protocol_report["errors"]:
         raise ValueError("HSP dataset failed protocol validation: " + "; ".join(protocol_report["errors"]))
@@ -99,6 +106,7 @@ def main() -> None:
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         num_train_epochs=args.num_train_epochs,
+        max_steps=args.max_steps,
         learning_rate=args.learning_rate,
         warmup_ratio=args.warmup_ratio,
         per_device_train_batch_size=args.per_device_train_batch_size,
