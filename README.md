@@ -76,6 +76,9 @@ $HF_HOME                       Hugging Face cache on external store
 
 Do not commit anything from `$INFOBUY_STORE`.
 
+Run `source setup/env.sh` once in every new shell before using the training,
+download, evaluation, or RL scripts.
+
 ## 2. Download Model Weights
 
 The default reproduction uses:
@@ -104,6 +107,7 @@ $INFOBUY_TEACHER_MODELS/qwen3-8b-main -> ../pretrained/Qwen3-8B
 To also download the optional stronger teacher:
 
 ```bash
+source setup/env.sh
 DOWNLOAD_OPTIONAL_TEACHERS=1 bash setup/download_models.sh
 ```
 
@@ -141,6 +145,7 @@ DAPO is not part of the main InfoBuy training pipeline. Download it only for
 optional RelayLLM baseline or ablation experiments:
 
 ```bash
+source setup/env.sh
 DOWNLOAD_DAPO_BASELINES=1 bash setup/download_data.sh
 ```
 
@@ -229,6 +234,7 @@ To run the 2-step RL smoke, first start the teacher service on port `7778`
 (section 7), then run:
 
 ```bash
+source setup/env.sh
 RUN_RL=1 bash experiments/run_hsp_smoke.sh
 ```
 
@@ -420,18 +426,21 @@ RUN_RL=1 bash experiments/run_hsp_smoke.sh
 Main RL run:
 
 ```bash
+source setup/env.sh
 bash experiments/run_hsp_experiment.sh main
 ```
 
 Shaped reward ablation:
 
 ```bash
+source setup/env.sh
 bash experiments/run_hsp_experiment.sh shaped
 ```
 
 Other ablations and sweeps:
 
 ```bash
+source setup/env.sh
 bash experiments/run_hsp_experiment.sh no_cost
 bash experiments/run_hsp_experiment.sh cost_low
 bash experiments/run_hsp_experiment.sh cost_high
@@ -456,6 +465,7 @@ GRPO checkpoints are FSDP shards. Merge the actor checkpoint into Hugging Face
 format before final evaluation:
 
 ```bash
+source setup/env.sh
 python RL_stage/scripts/model_merger.py \
   --local_dir ${INFOBUY_CKPT}/rl/qwen3_hsp_grpo_main/actor
 ```
@@ -469,6 +479,7 @@ $INFOBUY_CKPT/rl/qwen3_hsp_grpo_main/actor/huggingface
 Final evaluation:
 
 ```bash
+source setup/env.sh
 MERGED_MODEL=${INFOBUY_CKPT}/rl/qwen3_hsp_grpo_main/actor/huggingface
 
 bash eval/evaluate_forhelp.bash \
