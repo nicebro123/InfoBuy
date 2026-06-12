@@ -1,0 +1,19 @@
+study_name: hsp_smoke
+description: Tiny GRPO runtime smoke. Run `bash run.sh smoke` first to build smoke data.
+base_config: RL_stage/examples/config_hsp_smoke.yaml
+output_root: ${INFOBUY_STORE}/experiments
+checkpoint_root: ${INFOBUY_CKPT}/rl
+launcher: RL_stage/examples/qwen3_hsp_grpo.sh
+
+defaults:
+  gpu: "0"
+  model_path: ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft
+  teacher_port: 7778
+
+experiments:
+  - name: rl_smoke
+    run_name: qwen3_hsp_grpo_smoke
+    config: RL_stage/examples/config_hsp_smoke.yaml
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_smoke
+      trainer.max_steps: 2

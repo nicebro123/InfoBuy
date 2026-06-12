@@ -25,13 +25,16 @@ This README is the reproducibility entry point. Detailed design notes are in
 
 ```text
 InfoBuy/
+├── configs/        experiment specs for smoke, pilot, ablations, sweeps
 ├── SFT_stage/      dataset builders, HSP collator, SFT trainer, preflight checks
 ├── RL_stage/       GRPO configs, HSP rollout state machine, reward function
 ├── eval/           HSP generation, benchmark evaluation, result recheck
 ├── experiments/    smoke tests, main runs, ablation launchers
+├── scripts/        config-driven experiment and tmux launchers
 ├── setup/          external storage and download scripts
 ├── docs/hsp/       method, data, reward, training, storage docs
-└── utils/          vLLM teacher service
+├── utils/          vLLM teacher service
+└── run.sh          public reproduction entrypoint
 ```
 
 Large files do not belong in this repository. Model weights, datasets,
@@ -78,6 +81,48 @@ Do not commit anything from `$INFOBUY_STORE`.
 
 Run `source setup/env.sh` once in every new shell before using the training,
 download, evaluation, or RL scripts.
+
+## Quick Reproduction Path
+
+After setup, the preferred public entrypoint is `run.sh`:
+
+```bash
+bash run.sh setup
+bash run.sh download-models
+bash run.sh download-data
+bash run.sh build-data
+bash run.sh smoke
+bash run.sh sft --gpu 0
+bash run.sh teacher --gpu 1 --port 7778
+bash run.sh rl-smoke --gpu 0
+bash run.sh train --gpu-pairs '0;1;2;3'
+```
+
+Long-running commands start tmux sessions by default. Use `--foreground` when
+you want to run in the current shell:
+
+```bash
+bash run.sh teacher --gpu 1 --foreground
+```
+
+The config-driven experiment system is:
+
+```text
+configs/experiments/*.yaml       compact study specs
+scripts/launch_hsp_experiments.py materializes run_config.yaml + manifest
+scripts/launch_hsp_tmux.sh        starts one study in tmux
+scripts/launch_all_hsp_experiments.sh starts the official queue
+```
+
+Generated experiment artifacts are written outside Git:
+
+```text
+$INFOBUY_STORE/experiments/<study_name>/
+├── launch_manifest.yaml
+├── launch_tmux.sh
+├── run_gpu0.sh
+└── <run_name>/run_config.yaml
+```
 
 ## 2. Download Model Weights
 
@@ -222,6 +267,12 @@ source setup/env.sh
 bash experiments/run_hsp_smoke.sh
 ```
 
+Equivalent public entrypoint:
+
+```bash
+bash run.sh smoke
+```
+
 To also run a 2-step SFT smoke:
 
 ```bash
@@ -230,12 +281,24 @@ SFT_MODEL_NAME=${INFOBUY_PRETRAINED_MODELS}/Qwen3-0.6B \
 bash experiments/run_hsp_smoke.sh
 ```
 
+Or:
+
+```bash
+bash run.sh sft-smoke --gpu 0
+```
+
 To run the 2-step RL smoke, first start the teacher service on port `7778`
 (section 7), then run:
 
 ```bash
 source setup/env.sh
 RUN_RL=1 bash experiments/run_hsp_smoke.sh
+```
+
+Preferred tmux/spec entrypoint:
+
+```bash
+bash run.sh rl-smoke --gpu 0
 ```
 
 ## 6. Train The Student With SFT
@@ -274,6 +337,12 @@ SFT output:
 $INFOBUY_CKPT/sft/qwen3-0.6b-hsp-sft
 ```
 
+Public tmux entrypoint:
+
+```bash
+bash run.sh sft --gpu 0
+```
+
 ## 7. Start The Teacher Service
 
 The teacher service answers HSP `<ASK>` and `<VERIFY>` calls during evaluation
@@ -287,6 +356,12 @@ CUDA_VISIBLE_DEVICES=1 python utils/vllm_service.py \
   --port 7778 \
   --tensor_parallel_size 1 \
   --trust_remote_code
+```
+
+Preferred tmux entrypoint:
+
+```bash
+bash run.sh teacher --gpu 1 --port 7778
 ```
 
 Quick service check:
@@ -417,41 +492,62 @@ teacher budget to spend, and whether to accept feedback.
 
 Make sure the teacher service from section 7 is still running.
 
-Smoke RL:
+Dry-run a spec first. This only writes immutable run configs and queue scripts;
+it does not start training:
 
 ```bash
-RUN_RL=1 bash experiments/run_hsp_smoke.sh
+python scripts/launch_hsp_experiments.py \
+  --spec configs/experiments/hsp_pilot.yaml
 ```
 
-Main RL run:
+Inspect outputs under:
 
-```bash
-source setup/env.sh
-bash experiments/run_hsp_experiment.sh main
+```text
+$INFOBUY_STORE/experiments/hsp_pilot/
 ```
 
-Shaped reward ablation:
+Smoke RL in tmux:
 
 ```bash
-source setup/env.sh
-bash experiments/run_hsp_experiment.sh shaped
+bash run.sh rl-smoke --gpu 0
 ```
 
-Other ablations and sweeps:
+Pilot comparison in tmux:
 
 ```bash
-source setup/env.sh
-bash experiments/run_hsp_experiment.sh no_cost
-bash experiments/run_hsp_experiment.sh cost_low
-bash experiments/run_hsp_experiment.sh cost_high
-bash experiments/run_hsp_experiment.sh trust_low
-bash experiments/run_hsp_experiment.sh trust_high
-bash experiments/run_hsp_experiment.sh budget_small
-bash experiments/run_hsp_experiment.sh budget_large
+bash run.sh train \
+  --spec configs/experiments/hsp_pilot.yaml \
+  --gpu-pairs '0;1'
+```
+
+Official queue in tmux:
+
+```bash
+bash run.sh train --gpu-pairs '0;1;2;3'
+```
+
+This materializes and launches:
+
+```text
+configs/experiments/hsp_pilot.yaml
+configs/experiments/hsp_ablation_cost.yaml
+configs/experiments/hsp_ablation_trust.yaml
+configs/experiments/hsp_ablation_budget.yaml
+configs/experiments/hsp_ablation_interactions.yaml
+configs/experiments/hsp_hparam_sweep.yaml
+```
+
+Single-study lower-level entrypoint:
+
+```bash
+bash scripts/launch_hsp_tmux.sh \
+  --spec configs/experiments/hsp_ablation_cost.yaml \
+  --gpu-pairs '0;1'
 ```
 
 The experiment matrix is documented in
-[`experiments/hsp_experiment_matrix.md`](experiments/hsp_experiment_matrix.md).
+[`experiments/hsp_experiment_matrix.md`](experiments/hsp_experiment_matrix.md)
+and [`configs/experiments/README.md`](configs/experiments/README.md).
 
 Main RL checkpoints are saved under:
 
@@ -496,17 +592,17 @@ bash eval/evaluate_forhelp.bash \
 Use this order for a clean run:
 
 ```text
-1. source setup/env.sh && bash setup/make_dirs.sh
-2. bash setup/download_models.sh
-3. bash setup/download_data.sh
-4. python build_and_upload_hsp_dataset.py --build_only
-5. bash experiments/run_hsp_smoke.sh
-6. python -m SFT_stage.train_hsp ...
-7. start utils/vllm_service.py on port 7778
-8. run SFT evaluation with eval/evaluate_forhelp.bash
+1. bash run.sh setup
+2. bash run.sh download-models
+3. bash run.sh download-data
+4. bash run.sh build-data
+5. bash run.sh smoke
+6. bash run.sh sft --gpu 0
+7. bash run.sh teacher --gpu 1 --port 7778
+8. bash run.sh eval --gpu 0
 9. optional outcome replay SFT
-10. RUN_RL=1 bash experiments/run_hsp_smoke.sh
-11. bash experiments/run_hsp_experiment.sh main
+10. bash run.sh rl-smoke --gpu 0
+11. bash run.sh train --gpu-pairs '0;1;2;3'
 12. merge RL actor checkpoint
 13. run final evaluation and summarize results
 ```
@@ -518,7 +614,14 @@ Run these before committing or pushing:
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s . -p 'test*.py'
 
+python - <<'PY'
+from pathlib import Path
+path = Path("scripts/launch_hsp_experiments.py")
+compile(path.read_text(encoding="utf-8"), str(path), "exec")
+PY
+
 bash -n \
+  run.sh \
   setup/env.sh \
   setup/make_dirs.sh \
   setup/link_data.sh \
@@ -526,6 +629,8 @@ bash -n \
   setup/download_data.sh \
   experiments/run_hsp_smoke.sh \
   experiments/run_hsp_experiment.sh \
+  scripts/launch_hsp_tmux.sh \
+  scripts/launch_all_hsp_experiments.sh \
   eval/evaluate_forhelp.bash \
   RL_stage/examples/qwen3_hsp_grpo.sh
 

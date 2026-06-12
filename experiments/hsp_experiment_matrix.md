@@ -9,7 +9,7 @@ Run before any GPU training:
 ```bash
 python -m unittest RL_stage.tests.test_math_hsp_reward
 python -m unittest SFT_stage.tests.test_preflight_hsp
-bash experiments/run_hsp_smoke.sh
+bash run.sh smoke
 ```
 
 Required evidence:
@@ -23,7 +23,8 @@ Required evidence:
 Purpose: prove the end-to-end runtime path on tiny data.
 
 ```bash
-RUN_RL=1 bash experiments/run_hsp_smoke.sh
+bash run.sh teacher --gpu 1 --port 7778
+bash run.sh rl-smoke --gpu 0
 ```
 
 Expected settings:
@@ -42,8 +43,9 @@ Do not report research results from this gate.
 Purpose: run a cheap but meaningful 800/200 pilot.
 
 ```bash
-bash experiments/run_hsp_experiment.sh main
-bash experiments/run_hsp_experiment.sh shaped
+bash run.sh train \
+  --spec configs/experiments/hsp_pilot.yaml \
+  --gpu-pairs '0;1'
 ```
 
 Required comparisons:
@@ -62,15 +64,21 @@ Required comparisons:
 Run each ablation with the same seed and data split as `main`.
 
 ```bash
-bash experiments/run_hsp_experiment.sh no_cost
-bash experiments/run_hsp_experiment.sh cost_low
-bash experiments/run_hsp_experiment.sh cost_high
-bash experiments/run_hsp_experiment.sh trust_low
-bash experiments/run_hsp_experiment.sh trust_high
-bash experiments/run_hsp_experiment.sh budget_small
-bash experiments/run_hsp_experiment.sh budget_large
-bash experiments/run_hsp_experiment.sh interactions_1
-bash experiments/run_hsp_experiment.sh interactions_4
+bash run.sh train \
+  --spec configs/experiments/hsp_ablation_cost.yaml \
+  --gpu-pairs '0;1'
+
+bash run.sh train \
+  --spec configs/experiments/hsp_ablation_trust.yaml \
+  --gpu-pairs '0;1'
+
+bash run.sh train \
+  --spec configs/experiments/hsp_ablation_budget.yaml \
+  --gpu-pairs '0;1'
+
+bash run.sh train \
+  --spec configs/experiments/hsp_ablation_interactions.yaml \
+  --gpu-pairs '0;1'
 ```
 
 Interpretation targets:
@@ -85,10 +93,21 @@ Interpretation targets:
 Run after the pilot and required ablations:
 
 ```bash
-bash experiments/run_hsp_experiment.sh kl_low
-bash experiments/run_hsp_experiment.sh kl_high
-bash experiments/run_hsp_experiment.sh lr_low
-bash experiments/run_hsp_experiment.sh lr_high
+bash run.sh train \
+  --spec configs/experiments/hsp_hparam_sweep.yaml \
+  --gpu-pairs '0;1'
+```
+
+To materialize the full official queue in one dry run:
+
+```bash
+bash run.sh train --dry-run --skip-smoke --gpu-pairs '0;1;2;3'
+```
+
+Generated run configs, queue scripts, logs, and markers live under:
+
+```text
+$INFOBUY_STORE/experiments/<study_name>/
 ```
 
 Primary selection metric:

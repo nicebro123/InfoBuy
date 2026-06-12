@@ -1,0 +1,33 @@
+study_name: hsp_ablation_cost
+description: Test whether the policy learns information purchase instead of always asking.
+base_config: RL_stage/examples/config_hsp.yaml
+output_root: ${INFOBUY_STORE}/experiments
+checkpoint_root: ${INFOBUY_CKPT}/rl
+launcher: RL_stage/examples/qwen3_hsp_grpo.sh
+
+defaults:
+  gpu: "0"
+  model_path: ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft
+  teacher_port: 7778
+
+experiments:
+  - name: no_cost
+    run_name: qwen3_hsp_grpo_no_cost
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_no_cost
+      worker.reward.reward_function_kwargs.teacher_cost_weight: 0.0
+      worker.val_reward.reward_function_kwargs.teacher_cost_weight: 0.0
+
+  - name: cost_low
+    run_name: qwen3_hsp_grpo_cost_005
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_cost_005
+      worker.reward.reward_function_kwargs.teacher_cost_weight: 0.05
+      worker.val_reward.reward_function_kwargs.teacher_cost_weight: 0.05
+
+  - name: cost_high
+    run_name: qwen3_hsp_grpo_cost_030
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_cost_030
+      worker.reward.reward_function_kwargs.teacher_cost_weight: 0.30
+      worker.val_reward.reward_function_kwargs.teacher_cost_weight: 0.30

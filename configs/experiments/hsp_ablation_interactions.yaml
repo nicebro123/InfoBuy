@@ -1,0 +1,24 @@
+study_name: hsp_ablation_interactions
+description: Test whether multiple information purchases are necessary.
+base_config: RL_stage/examples/config_hsp.yaml
+output_root: ${INFOBUY_STORE}/experiments
+checkpoint_root: ${INFOBUY_CKPT}/rl
+launcher: RL_stage/examples/qwen3_hsp_grpo.sh
+
+defaults:
+  gpu: "0"
+  model_path: ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft
+  teacher_port: 7778
+
+experiments:
+  - name: interactions_1
+    run_name: qwen3_hsp_grpo_interactions_1
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_interactions_1
+      worker.rollout.max_interactions: 1
+
+  - name: interactions_4
+    run_name: qwen3_hsp_grpo_interactions_4
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_interactions_4
+      worker.rollout.max_interactions: 4

@@ -1,0 +1,24 @@
+study_name: hsp_pilot
+description: Pilot comparison between sparse outcome-cost-trust reward and shaped reward.
+base_config: RL_stage/examples/config_hsp.yaml
+output_root: ${INFOBUY_STORE}/experiments
+checkpoint_root: ${INFOBUY_CKPT}/rl
+launcher: RL_stage/examples/qwen3_hsp_grpo.sh
+
+defaults:
+  gpu: "0"
+  model_path: ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft
+  teacher_port: 7778
+
+experiments:
+  - name: main
+    run_name: qwen3_hsp_grpo_main
+    config: RL_stage/examples/config_hsp.yaml
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_main
+
+  - name: shaped
+    run_name: qwen3_hsp_grpo_shaped
+    config: RL_stage/examples/config_hsp_shaped.yaml
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_shaped

@@ -1,0 +1,34 @@
+study_name: hsp_ablation_trust
+description: Test whether ACCEPT and reject behavior are calibrated by trust penalties.
+base_config: RL_stage/examples/config_hsp.yaml
+output_root: ${INFOBUY_STORE}/experiments
+checkpoint_root: ${INFOBUY_CKPT}/rl
+launcher: RL_stage/examples/qwen3_hsp_grpo.sh
+
+defaults:
+  gpu: "0"
+  model_path: ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft
+  teacher_port: 7778
+
+experiments:
+  - name: trust_low
+    run_name: qwen3_hsp_grpo_trust_025
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_trust_025
+      worker.reward.reward_function_kwargs.wrong_accept_weight: 0.25
+      worker.val_reward.reward_function_kwargs.wrong_accept_weight: 0.25
+      worker.reward.reward_function_kwargs.wrong_reject_weight: 0.25
+      worker.val_reward.reward_function_kwargs.wrong_reject_weight: 0.25
+      worker.reward.reward_function_kwargs.wrong_implicit_adoption_weight: 0.25
+      worker.val_reward.reward_function_kwargs.wrong_implicit_adoption_weight: 0.25
+
+  - name: trust_high
+    run_name: qwen3_hsp_grpo_trust_080
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_trust_080
+      worker.reward.reward_function_kwargs.wrong_accept_weight: 0.80
+      worker.val_reward.reward_function_kwargs.wrong_accept_weight: 0.80
+      worker.reward.reward_function_kwargs.wrong_reject_weight: 0.80
+      worker.val_reward.reward_function_kwargs.wrong_reject_weight: 0.80
+      worker.reward.reward_function_kwargs.wrong_implicit_adoption_weight: 0.80
+      worker.val_reward.reward_function_kwargs.wrong_implicit_adoption_weight: 0.80

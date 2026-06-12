@@ -1,0 +1,36 @@
+study_name: hsp_hparam_sweep
+description: Lightweight KL and learning-rate sweep after pilot and ablations.
+base_config: RL_stage/examples/config_hsp.yaml
+output_root: ${INFOBUY_STORE}/experiments
+checkpoint_root: ${INFOBUY_CKPT}/rl
+launcher: RL_stage/examples/qwen3_hsp_grpo.sh
+
+defaults:
+  gpu: "0"
+  model_path: ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft
+  teacher_port: 7778
+
+experiments:
+  - name: kl_low
+    run_name: qwen3_hsp_grpo_kl_003
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_kl_003
+      algorithm.kl_coef: 0.003
+
+  - name: kl_high
+    run_name: qwen3_hsp_grpo_kl_030
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_kl_030
+      algorithm.kl_coef: 0.03
+
+  - name: lr_low
+    run_name: qwen3_hsp_grpo_lr_3e-7
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_lr_3e-7
+      worker.actor.optim.lr: 3.0e-7
+
+  - name: lr_high
+    run_name: qwen3_hsp_grpo_lr_3e-6
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_lr_3e-6
+      worker.actor.optim.lr: 3.0e-6

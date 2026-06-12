@@ -1,0 +1,30 @@
+study_name: hsp_ablation_budget
+description: Test how much teacher information should be purchased.
+base_config: RL_stage/examples/config_hsp.yaml
+output_root: ${INFOBUY_STORE}/experiments
+checkpoint_root: ${INFOBUY_CKPT}/rl
+launcher: RL_stage/examples/qwen3_hsp_grpo.sh
+
+defaults:
+  gpu: "0"
+  model_path: ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft
+  teacher_port: 7778
+
+experiments:
+  - name: budget_small
+    run_name: qwen3_hsp_grpo_budget_small
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_budget_small
+      worker.rollout.ask_budget_tokens: 32
+      worker.rollout.verify_budget_tokens: 48
+      worker.reward.reward_function_kwargs.teacher_token_budget: 80.0
+      worker.val_reward.reward_function_kwargs.teacher_token_budget: 80.0
+
+  - name: budget_large
+    run_name: qwen3_hsp_grpo_budget_large
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_budget_large
+      worker.rollout.ask_budget_tokens: 96
+      worker.rollout.verify_budget_tokens: 128
+      worker.reward.reward_function_kwargs.teacher_token_budget: 224.0
+      worker.val_reward.reward_function_kwargs.teacher_token_budget: 224.0
