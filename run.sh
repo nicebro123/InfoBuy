@@ -334,9 +334,11 @@ case "$command" in
   eval)
     require_env
     gpu="${gpu:-0}"
+    model_path="${model_path:-${MODEL_PATH:-${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft}}"
     export SKIP_LLM_RECHECK="${SKIP_LLM_RECHECK:-1}"
+    export HF_DATASETS_OFFLINE="${HF_DATASETS_OFFLINE:-1}"
     VLLM_USE_V1="${VLLM_USE_V1:-0}" CUDA_VISIBLE_DEVICES="$gpu" bash eval/evaluate_forhelp.bash \
-      "${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft" \
+      "$model_path" \
       Qwen3-8B \
       "$port" \
       "$gpu" \

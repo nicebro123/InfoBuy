@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import os
 import json
 import re
 from pathlib import Path
@@ -80,9 +81,18 @@ class MathDatasetHandler(DatasetHandler):
         super().__init__(answer_pattern)
 
     def load_data(self):
-        df = pandas.read_csv(
-            f"https://openaipublic.blob.core.windows.net/simple-evals/math_500_test.csv"
+        local_root = os.environ.get("INFOBUY_DATASETS")
+        local_path = (
+            Path(local_root) / "benchmarks" / "math500" / "math_500_test.csv"
+            if local_root
+            else None
         )
+        source = (
+            local_path
+            if local_path is not None and local_path.exists()
+            else "https://openaipublic.blob.core.windows.net/simple-evals/math_500_test.csv"
+        )
+        df = pandas.read_csv(source)
         examples = [row.to_dict() for _, row in df.iterrows()]
         questions = [example['Question'] for example in examples]
         answers = [example['Answer'] for example in examples]
