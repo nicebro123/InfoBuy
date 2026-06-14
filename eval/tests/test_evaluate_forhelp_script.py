@@ -107,6 +107,50 @@ class EvaluateForHelpScriptTest(unittest.TestCase):
         self.assertIn("--output_tag smoke", log_text)
         self.assertNotIn("--dataset gsm8k", log_text)
 
+    def test_hsp_generator_controls_are_forwarded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bin_dir = Path(directory)
+            call_log = bin_dir / "calls.log"
+            python_stub = bin_dir / "python"
+            python_stub.write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' \"$*\" >> \"$CALL_LOG\"\n"
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            sleep_stub = bin_dir / "sleep"
+            sleep_stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            python_stub.chmod(0o755)
+            sleep_stub.chmod(0o755)
+            env = dict(os.environ)
+            env["PATH"] = f"{bin_dir}:{env['PATH']}"
+            env["CALL_LOG"] = str(call_log)
+            env["SKIP_LLM_RECHECK"] = "1"
+            env["EVAL_TASKS"] = "math"
+            env["MAX_INTERACTIONS"] = "0"
+            env["ASK_BUDGET_TOKENS"] = "32"
+            env["VERIFY_BUDGET_TOKENS"] = "48"
+            env["STUDENT_TEMPERATURE"] = "0.2"
+            env["TEACHER_HELP_TEMPERATURE"] = "0.4"
+            env["TEACHER_REVIEW_TEMPERATURE"] = "0.0"
+            result = subprocess.run(
+                ["bash", str(SCRIPT_PATH), "model", "teacher", "7778", "0", "hsp", "1", "independent"],
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            log_text = call_log.read_text(encoding="utf-8")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("--max_interactions 0", log_text)
+        self.assertIn("--ask_budget_tokens 32", log_text)
+        self.assertIn("--verify_budget_tokens 48", log_text)
+        self.assertIn("--student_temperature 0.2", log_text)
+        self.assertIn("--teacher_help_temperature 0.4", log_text)
+        self.assertIn("--teacher_review_temperature 0.0", log_text)
+
     def test_collection_script_missing_required_arguments_prints_usage(self):
         result = subprocess.run(
             ["bash", str(COLLECT_SCRIPT_PATH)],

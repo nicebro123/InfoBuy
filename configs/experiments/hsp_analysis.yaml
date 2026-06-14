@@ -1,0 +1,96 @@
+study_name: hsp_analysis
+description: RelayLLM-inspired analysis queue for reward components and help-seeking behavior.
+base_config: RL_stage/examples/config_hsp_shaped.yaml
+output_root: ${INFOBUY_STORE}/experiments
+checkpoint_root: ${INFOBUY_CKPT}/rl
+launcher: RL_stage/examples/qwen3_hsp_grpo.sh
+
+defaults:
+  gpu: "0"
+  model_path: ${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft
+  teacher_port: 7778
+
+experiments:
+  - name: shaped_no_independent_bonus
+    run_name: qwen3_hsp_grpo_shaped_no_independent_bonus
+    config: RL_stage/examples/config_hsp_shaped.yaml
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_shaped_no_independent_bonus
+      worker.reward.reward_function_kwargs.independent_correct_weight: 0.0
+      worker.val_reward.reward_function_kwargs.independent_correct_weight: 0.0
+
+  - name: shaped_no_exploration_reward
+    run_name: qwen3_hsp_grpo_shaped_no_exploration_reward
+    config: RL_stage/examples/config_hsp_shaped.yaml
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_shaped_no_exploration_reward
+      worker.reward.reward_function_kwargs.useful_accept_weight: 0.0
+      worker.val_reward.reward_function_kwargs.useful_accept_weight: 0.0
+      worker.reward.reward_function_kwargs.resist_bad_review_weight: 0.0
+      worker.val_reward.reward_function_kwargs.resist_bad_review_weight: 0.0
+
+  - name: shaped_no_protocol_penalty
+    run_name: qwen3_hsp_grpo_shaped_no_protocol_penalty
+    config: RL_stage/examples/config_hsp_shaped.yaml
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_shaped_no_protocol_penalty
+      worker.reward.reward_function_kwargs.invalid_protocol_weight: 0.0
+      worker.val_reward.reward_function_kwargs.invalid_protocol_weight: 0.0
+      worker.reward.reward_function_kwargs.denied_action_weight: 0.0
+      worker.val_reward.reward_function_kwargs.denied_action_weight: 0.0
+
+  - name: shaped_no_accept_penalty
+    run_name: qwen3_hsp_grpo_shaped_no_accept_penalty
+    config: RL_stage/examples/config_hsp_shaped.yaml
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_shaped_no_accept_penalty
+      worker.reward.reward_function_kwargs.wrong_accept_weight: 0.0
+      worker.val_reward.reward_function_kwargs.wrong_accept_weight: 0.0
+      worker.reward.reward_function_kwargs.unsupported_accept_weight: 0.0
+      worker.val_reward.reward_function_kwargs.unsupported_accept_weight: 0.0
+
+  - name: shaped_no_reject_penalty
+    run_name: qwen3_hsp_grpo_shaped_no_reject_penalty
+    config: RL_stage/examples/config_hsp_shaped.yaml
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_shaped_no_reject_penalty
+      worker.reward.reward_function_kwargs.wrong_reject_weight: 0.0
+      worker.val_reward.reward_function_kwargs.wrong_reject_weight: 0.0
+
+  - name: shaped_no_teacher_error_penalty
+    run_name: qwen3_hsp_grpo_shaped_no_teacher_error_penalty
+    config: RL_stage/examples/config_hsp_shaped.yaml
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_shaped_no_teacher_error_penalty
+      worker.reward.reward_function_kwargs.teacher_error_weight: 0.0
+      worker.val_reward.reward_function_kwargs.teacher_error_weight: 0.0
+
+  - name: fixed_budget_32_32
+    run_name: qwen3_hsp_grpo_fixed_budget_32_32
+    config: RL_stage/examples/config_hsp.yaml
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_fixed_budget_32_32
+      worker.rollout.ask_budget_tokens: 32
+      worker.rollout.verify_budget_tokens: 32
+      worker.reward.reward_function_kwargs.teacher_token_budget: 64.0
+      worker.val_reward.reward_function_kwargs.teacher_token_budget: 64.0
+
+  - name: fixed_budget_64_96
+    run_name: qwen3_hsp_grpo_fixed_budget_64_96
+    config: RL_stage/examples/config_hsp.yaml
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_fixed_budget_64_96
+      worker.rollout.ask_budget_tokens: 64
+      worker.rollout.verify_budget_tokens: 96
+      worker.reward.reward_function_kwargs.teacher_token_budget: 160.0
+      worker.val_reward.reward_function_kwargs.teacher_token_budget: 160.0
+
+  - name: fixed_budget_128_192
+    run_name: qwen3_hsp_grpo_fixed_budget_128_192
+    config: RL_stage/examples/config_hsp.yaml
+    overrides:
+      trainer.experiment_name: qwen3_hsp_grpo_fixed_budget_128_192
+      worker.rollout.ask_budget_tokens: 128
+      worker.rollout.verify_budget_tokens: 192
+      worker.reward.reward_function_kwargs.teacher_token_budget: 320.0
+      worker.val_reward.reward_function_kwargs.teacher_token_budget: 320.0

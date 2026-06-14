@@ -36,6 +36,24 @@ fi
 if [ -n "${MAX_EXAMPLES:-}" ]; then
   generate_extra_args+=(--max_examples "${MAX_EXAMPLES}")
 fi
+if [ -n "${MAX_INTERACTIONS:-}" ]; then
+  generate_extra_args+=(--max_interactions "${MAX_INTERACTIONS}")
+fi
+if [ -n "${ASK_BUDGET_TOKENS:-}" ]; then
+  generate_extra_args+=(--ask_budget_tokens "${ASK_BUDGET_TOKENS}")
+fi
+if [ -n "${VERIFY_BUDGET_TOKENS:-}" ]; then
+  generate_extra_args+=(--verify_budget_tokens "${VERIFY_BUDGET_TOKENS}")
+fi
+if [ -n "${STUDENT_TEMPERATURE:-}" ]; then
+  generate_extra_args+=(--student_temperature "${STUDENT_TEMPERATURE}")
+fi
+if [ -n "${TEACHER_HELP_TEMPERATURE:-}" ]; then
+  generate_extra_args+=(--teacher_help_temperature "${TEACHER_HELP_TEMPERATURE}")
+fi
+if [ -n "${TEACHER_REVIEW_TEMPERATURE:-}" ]; then
+  generate_extra_args+=(--teacher_review_temperature "${TEACHER_REVIEW_TEMPERATURE}")
+fi
 if [ "${SKIP_LLM_RECHECK:-0}" = "1" ]; then
   recheck_extra_args+=(--skip_llm_recheck)
 elif [ -z "${OPENAI_API_KEY:-}" ]; then

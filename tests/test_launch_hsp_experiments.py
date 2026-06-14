@@ -132,6 +132,54 @@ class HSPExperimentLauncherTest(unittest.TestCase):
             self.assertEqual(run_config["trainer"]["max_steps"], 2)
             self.assertIn("train_smoke", run_config["data"]["train_files"])
 
+    def test_analysis_spec_materializes_reward_component_and_fixed_budget_runs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Path(directory)
+            result = self.run_launcher(
+                store,
+                "--spec",
+                "configs/experiments/hsp_analysis.yaml",
+                "--gpus",
+                "2",
+                "--teacher-gpus",
+                "1",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            study_dir = store / "experiments" / "hsp_analysis"
+            manifest = yaml.safe_load((study_dir / "launch_manifest.yaml").read_text(encoding="utf-8"))
+            run_names = [run["run_name"] for run in manifest["runs"]]
+            self.assertIn("qwen3_hsp_grpo_shaped_no_independent_bonus", run_names)
+            self.assertIn("qwen3_hsp_grpo_fixed_budget_128_192", run_names)
+
+            no_independent = yaml.safe_load(
+                (
+                    study_dir
+                    / "qwen3_hsp_grpo_shaped_no_independent_bonus"
+                    / "run_config.yaml"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                no_independent["worker"]["reward"]["reward_function_kwargs"]["independent_correct_weight"],
+                0.0,
+            )
+            self.assertEqual(
+                no_independent["worker"]["reward"]["reward_function_kwargs"]["useful_accept_weight"],
+                0.1,
+            )
+
+            fixed_budget = yaml.safe_load(
+                (study_dir / "qwen3_hsp_grpo_fixed_budget_128_192" / "run_config.yaml").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(fixed_budget["worker"]["rollout"]["ask_budget_tokens"], 128)
+            self.assertEqual(fixed_budget["worker"]["rollout"]["verify_budget_tokens"], 192)
+            self.assertEqual(
+                fixed_budget["worker"]["reward"]["reward_function_kwargs"]["teacher_token_budget"],
+                320.0,
+            )
+
     def test_existing_completion_marker_marks_run_as_existing(self):
         with tempfile.TemporaryDirectory() as directory:
             store = Path(directory)

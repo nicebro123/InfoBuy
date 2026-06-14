@@ -67,6 +67,7 @@ Dotted keys under `overrides` are applied to the materialized
 | `hsp_ablation_interactions.yaml` | interaction-count ablations |
 | `hsp_hparam_sweep.yaml` | KL and learning-rate sweep |
 | `hsp_official.yaml` | combined official queue for main paper runs |
+| `hsp_analysis.yaml` | RelayLLM-inspired reward component and fixed-budget analysis |
 
 Generate scripts without launching:
 
@@ -91,4 +92,18 @@ python scripts/launch_hsp_experiments.py \
   --spec configs/experiments/hsp_official.yaml \
   --teacher-gpus 1 \
   --launch-tmux
+```
+
+Run the RelayLLM-inspired analysis queue on the minimum two-GPU layout:
+
+```bash
+TEACHER_GPU=0 WORKER_GPUS=1 SPEC=configs/experiments/hsp_analysis.yaml \
+bash scripts/launch_hsp_full_stack.sh --skip-smoke
+```
+
+Run analysis evaluation suites after exporting a checkpoint to a
+HuggingFace-loadable directory:
+
+```bash
+MODEL_PATH=/path/to/model GPU_QUEUE=1 bash scripts/run_hsp_analysis_eval.sh all
 ```
