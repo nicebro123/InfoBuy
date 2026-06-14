@@ -97,6 +97,13 @@ Use `scripts/run_hsp_analysis_eval.sh` for evaluation-only analyses:
 
 ## Execution
 
+Prepare the full SpecFlow-style two-GPU queue:
+
+```bash
+bash scripts/run_full_pipeline_2gpu.sh
+bash scripts/run_full_pipeline_2gpu.sh --launch
+```
+
 Preflight:
 
 ```bash

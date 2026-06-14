@@ -10,6 +10,13 @@ bash run.sh rl-smoke --gpu 0 --teacher-gpus 1
 bash run.sh train --spec configs/experiments/hsp_pilot.yaml --teacher-gpus 1 --gpu-pairs '0'
 ```
 
+For paper-facing runs, use the SpecFlow-style full pipeline queue:
+
+```bash
+bash scripts/run_full_pipeline_2gpu.sh
+bash scripts/run_full_pipeline_2gpu.sh --launch
+```
+
 Launching HSP RL requires two distinct GPU roles: the already-running teacher
 service and at least one training worker. Keep `--teacher-gpus` disjoint from
 `--gpu-pairs`.
@@ -68,6 +75,10 @@ Dotted keys under `overrides` are applied to the materialized
 | `hsp_hparam_sweep.yaml` | KL and learning-rate sweep |
 | `hsp_official.yaml` | combined official queue for main paper runs |
 | `hsp_analysis.yaml` | RelayLLM-inspired reward component and fixed-budget analysis |
+
+The recommended paper order is tracked in `EXPERIMENT_ORDER.md`. Keep new
+studies declarative under `configs/experiments/`, then add them to
+`scripts/run_full_pipeline_2gpu.sh` when they become part of the full queue.
 
 Generate scripts without launching:
 
