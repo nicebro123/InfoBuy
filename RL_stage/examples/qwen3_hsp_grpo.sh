@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+export VLLM_USE_V1="${VLLM_USE_V1:-0}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RL_STAGE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REPO_ROOT="$(cd "${RL_STAGE_DIR}/.." && pwd)"

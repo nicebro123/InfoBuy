@@ -241,7 +241,7 @@ case "$command" in
   teacher)
     require_env
     gpu="${gpu:-1}"
-    cmd="cd $(printf '%q' "$ROOT_DIR") && source setup/env.sh >/dev/null && CUDA_VISIBLE_DEVICES=$(printf '%q' "$gpu") $PYTHON_BIN utils/vllm_service.py --model_path \${INFOBUY_TEACHER_MODELS}/qwen3-8b-main --port $(printf '%q' "$port") --tensor_parallel_size 1 --trust_remote_code"
+    cmd="cd $(printf '%q' "$ROOT_DIR") && source setup/env.sh >/dev/null && VLLM_USE_V1=\${VLLM_USE_V1:-0} CUDA_VISIBLE_DEVICES=$(printf '%q' "$gpu") $PYTHON_BIN utils/vllm_service.py --model_path \${INFOBUY_TEACHER_MODELS}/qwen3-8b-main --port $(printf '%q' "$port") --tensor_parallel_size 1 --trust_remote_code"
     start_tmux_or_foreground "infobuy_teacher_${port}" "$cmd" "$foreground"
     ;;
   rollout-smoke)
@@ -335,7 +335,7 @@ case "$command" in
     require_env
     gpu="${gpu:-0}"
     export SKIP_LLM_RECHECK="${SKIP_LLM_RECHECK:-1}"
-    CUDA_VISIBLE_DEVICES="$gpu" bash eval/evaluate_forhelp.bash \
+    VLLM_USE_V1="${VLLM_USE_V1:-0}" CUDA_VISIBLE_DEVICES="$gpu" bash eval/evaluate_forhelp.bash \
       "${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft" \
       Qwen3-8B \
       "$port" \

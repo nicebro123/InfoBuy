@@ -1,4 +1,11 @@
 import argparse
+import os
+
+# vLLM V1 uses FlashInfer JIT sampling on this stack. The runtime image has
+# CUDA runtime wheels but no full CUDA toolkit, so default to the stable V0
+# engine unless the caller explicitly opts back in.
+os.environ.setdefault("VLLM_USE_V1", "0")
+
 from flask import Flask, request, jsonify
 from flask_restful import Api, Resource
 from vllm import LLM, SamplingParams

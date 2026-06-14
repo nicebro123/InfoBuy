@@ -10,12 +10,33 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 import requests
-import vllm
 from transformers import AutoTokenizer
+
+# vLLM V1 uses FlashInfer JIT sampling on this stack. Default to the stable V0
+# engine unless the caller explicitly opts back in with VLLM_USE_V1=1.
+os.environ.setdefault("VLLM_USE_V1", "0")
+
+try:
+    import vllm
+except ImportError:  # vLLM is required only when generation is actually run.
+    vllm = None
+
+
+def _require_vllm():
+    global vllm
+    if vllm is None:
+        try:
+            import vllm as loaded_vllm
+        except ImportError as error:
+            raise ImportError("eval.generate_withhelp requires vLLM for student generation.") from error
+        vllm = loaded_vllm
+    return vllm
 
 try:
     from . import datasets_loader
 except ImportError:
+    if __package__:
+        raise
     import datasets_loader
 
 STORAGE_PATH = os.getenv("STORAGE_PATH", ".")
@@ -138,6 +159,7 @@ def run_relay_generation(llm: vllm.LLM, tokenizer: AutoTokenizer, prompts: List[
     BASE_SMALL_MODEL_MAX_TOKENS = GLOBAL_MAX_TOKENS
 
     call_tag_pattern = re.compile(r"<call>\s*\d+\s*</call>")
+    vllm_mod = _require_vllm()
 
     request_pool: List[Dict] = [{
         "id": i, 
@@ -178,7 +200,7 @@ def run_relay_generation(llm: vllm.LLM, tokenizer: AutoTokenizer, prompts: List[
                 turn_max_tokens = min(BASE_SMALL_MODEL_MAX_TOKENS, remaining_tokens)
                 
                 small_model_params_list.append(
-                    vllm.SamplingParams(
+                    vllm_mod.SamplingParams(
                         temperature=0.7, 
                         max_tokens=turn_max_tokens,
                         stop=["</call>"], 
@@ -513,6 +535,7 @@ def run_hsp_generation(
         raise ValueError(f"{collection_mode} requires max_interactions >= 1.")
     if ask_budget_tokens <= 0 or verify_budget_tokens <= 0:
         raise ValueError("ask_budget_tokens and verify_budget_tokens must be positive.")
+    vllm_mod = _require_vllm()
     # Pre-compile patterns for <ASK>N</ASK> and <VERIFY>N</VERIFY>
     ask_tag_pattern = re.compile(r"<ASK>\s*(\d+)\s*</ASK>")
     verify_tag_pattern = re.compile(r"<VERIFY>\s*(\d+)\s*</VERIFY>")
@@ -583,7 +606,7 @@ def run_hsp_generation(
                     params["include_stop_str_in_output"] = True
 
                 current_prompts.append(req["base_prompt"] + req["current_solution"])
-                sampling_params.append(vllm.SamplingParams(**params))
+                sampling_params.append(vllm_mod.SamplingParams(**params))
                 active_batch.append(req)
 
             if active_batch:
@@ -784,7 +807,8 @@ def main(args):
     print(f"Loading tokenizer from {tokenizer_path}...")
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
 
-    model = vllm.LLM(
+    vllm_mod = _require_vllm()
+    model = vllm_mod.LLM(
         model=args.small_model,
         tokenizer=tokenizer_path,
         gpu_memory_utilization=0.85,

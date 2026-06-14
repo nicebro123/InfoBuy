@@ -73,6 +73,12 @@ class ScriptedLLM:
         return [Output(next(self.steps)) for _ in prompts]
 
 
+def sampling_param_value(params, key):
+    if hasattr(params, "kwargs"):
+        return params.kwargs[key]
+    return getattr(params, key)
+
+
 class GenerateHSPSegmentsTest(unittest.TestCase):
     def run_with_teacher(
         self,
@@ -114,7 +120,7 @@ class GenerateHSPSegmentsTest(unittest.TestCase):
         self.assertIn("Tentative", request["events"][0]["student_before_feedback"])
         self.assertIn("<ACCEPT>", request["events"][0]["student_after_feedback"])
         self.assertNotIn("Verdict", request["student_output_for_grading"])
-        self.assertFalse(llm.sampling_params[0].kwargs["skip_special_tokens"])
+        self.assertFalse(sampling_param_value(llm.sampling_params[0], "skip_special_tokens"))
 
     def test_force_ask_creates_exploration_action_segment(self):
         request = self.run_with_teacher(

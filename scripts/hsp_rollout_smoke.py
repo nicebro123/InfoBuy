@@ -16,6 +16,10 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 
 def default_model_path() -> str:
     checkpoint_root = os.environ.get("INFOBUY_CKPT")
@@ -172,6 +176,7 @@ def run_mode(args: argparse.Namespace, collection_mode: str, output_tag: str) ->
         "--overwrite_results",
     ]
     env = dict(os.environ)
+    env.setdefault("VLLM_USE_V1", "0")
     if args.gpu:
         env["CUDA_VISIBLE_DEVICES"] = args.gpu
     subprocess.run(command, cwd=args.repo_root, env=env, check=True)

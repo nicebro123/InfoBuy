@@ -287,6 +287,7 @@ def write_gpu_queue(path: Path, runs: list[Mapping[str, Any]], *, repo_root: Pat
                 f"  export MODEL_PATH={shlex.quote(str(run['model_path']))}",
                 f"  export SAVE_PATH={shlex.quote(str(run['save_path']))}",
                 f"  export HSP_CONFIG={shlex.quote(str(run['run_config']))}",
+                "  export VLLM_USE_V1=${VLLM_USE_V1:-0}",
                 "  export PYTHONUNBUFFERED=1",
             ]
         )

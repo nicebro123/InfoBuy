@@ -36,7 +36,11 @@ from transformers import (
 )
 from transformers.modeling_utils import no_init_weights
 
-from ..models.monkey_patch import apply_ulysses_patch
+try:
+    from ..models.monkey_patch import apply_ulysses_patch
+except ImportError:
+    apply_ulysses_patch = None
+
 from ..protocol import DataProto
 from ..single_controller.base import Worker
 from ..single_controller.base.decorator import Dispatch, register
@@ -182,6 +186,11 @@ class FSDPWorker(Worker):
             self.print_rank0(f"Model config: {self.model_config}")
 
         if padding_free:
+            if apply_ulysses_patch is None:
+                raise ImportError(
+                    "worker.actor.padding_free=true requires verl.models.monkey_patch. "
+                    "Set worker.actor.padding_free=false or add the matching Ulysses attention patch."
+                )
             apply_ulysses_patch(self.model_config.model_type)
             self.print_rank0("Ulysses patch applied!")
 
