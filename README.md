@@ -214,6 +214,12 @@ verify_reject_bad_feedback
 verify_uncertain
 ```
 
+The default SFT training protocol emits all six behavior types for each
+training problem. This is intentional: SFT is the protocol warm-up stage, so the
+policy action tokens must be dense enough for the student to reliably learn
+`<ASK>`, `<VERIFY>`, and `<ACCEPT>`. The RL stage then learns the calibrated
+information-buying policy from the raw question/answer split.
+
 Build the default pilot dataset:
 
 ```bash

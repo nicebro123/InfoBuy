@@ -193,9 +193,13 @@ AIME 2025
 python -m SFT_stage.build_hsp_sft \
   --input ${INFOBUY_GENERATED_DATA}/raw/numinamath_cot_synthetic_math_train_pilot_v1_800.jsonl \
   --output ${INFOBUY_GENERATED_DATA}/protocol/hsp_protocol_train_pilot_v1.jsonl \
-  --variants_per_problem 1 \
+  --emit_all_types \
   --seed 42
 ```
+
+训练集也使用 `--emit_all_types` 是有意设计：SFT warm-up 的第一目标是让模型稳定学会
+`<ASK>`、`<VERIFY>`、`<ACCEPT>` 的语法和上下文语义，而不是在这一阶段学习真实调用频率。
+真实的信息购买策略交给后续 GRPO/RL 从 raw question + gold answer 上学习。
 
 验证集：
 

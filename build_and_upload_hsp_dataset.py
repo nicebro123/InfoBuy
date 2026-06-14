@@ -219,8 +219,8 @@ def step3_build_protocol_sft(
     run_command(
         [sys.executable, "-m", "SFT_stage.build_hsp_sft",
          "--input", str(train_raw), "--output", str(train_out),
-         "--variants_per_problem", "1", "--seed", str(seed)],
-        "Building protocol SFT training data (weighted sampling, 1 variant/problem)",
+         "--emit_all_types", "--seed", str(seed)],
+        "Building protocol SFT training data (all 6 protocol types/problem)",
     )
     run_command(
         [sys.executable, "-m", "SFT_stage.build_hsp_sft",

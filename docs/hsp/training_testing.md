@@ -72,7 +72,7 @@ Build protocol SFT data:
 python -m SFT_stage.build_hsp_sft \
   --input ${INFOBUY_GENERATED_DATA}/raw/numinamath_cot_synthetic_math_train_pilot_v1_800.jsonl \
   --output ${INFOBUY_GENERATED_DATA}/protocol/hsp_protocol_train_pilot_v1.jsonl \
-  --variants_per_problem 1 \
+  --emit_all_types \
   --seed 42
 
 python -m SFT_stage.build_hsp_sft \
@@ -81,6 +81,10 @@ python -m SFT_stage.build_hsp_sft \
   --emit_all_types \
   --seed 42
 ```
+
+The training split deliberately emits all six protocol types per problem. This
+densifies the policy action tokens during SFT warm-up; calibrated action
+frequency is learned later by RL, not by the synthetic protocol prior.
 
 Validate the structured protocol data:
 
