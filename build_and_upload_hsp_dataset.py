@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """Build HSP SFT datasets and optionally upload to HuggingFace Hub.
 
-The uploaded dataset uses a flat question/answer/system SFT schema:
+The local training artifact for ``SFT_stage.train_hsp`` is the structured
+``protocol/*.jsonl`` data with explicit student/teacher segments and loss flags.
+
+The optional uploaded dataset uses a flat question/answer/system SFT schema:
     question (str):  The math problem (with prompt suffix)
     answer (str):    The complete response (student text + teacher context interleaved)
     system (str):    System prompt (empty string)
 
-This keeps the data compatible with standard SFTTrainer pipelines (e.g. SFT_stage/train_hsp.py).
-An additional metadata column 'sample_type' is included for filtering.
+This keeps exported data compatible with generic SFTTrainer-style pipelines.
+An additional metadata column 'sample_type' is included for filtering. Do not
+feed the flat export to ``SFT_stage.train_hsp``; use the structured protocol
+files for segment-aware student-only loss masking.
 
 Usage:
     # Step 1: Build only (inspect locally first)
