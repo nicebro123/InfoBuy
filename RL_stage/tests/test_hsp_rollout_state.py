@@ -1,15 +1,24 @@
 import importlib.util
+import importlib.machinery
 import sys
 import types
 import unittest
 from pathlib import Path
 
 
-requests = types.ModuleType("requests")
-sys.modules.setdefault("requests", requests)
-numpy = types.ModuleType("numpy")
-numpy.ndarray = object
-sys.modules.setdefault("numpy", numpy)
+def ensure_module(name, **attrs):
+    try:
+        __import__(name)
+    except ImportError:
+        module = types.ModuleType(name)
+        module.__spec__ = importlib.machinery.ModuleSpec(name, loader=None)
+        for key, value in attrs.items():
+            setattr(module, key, value)
+        sys.modules.setdefault(name, module)
+
+
+ensure_module("requests")
+ensure_module("numpy", ndarray=object)
 
 try:
     import torch  # noqa: F401
@@ -20,17 +29,13 @@ except ImportError:
     sys.modules.setdefault("torch", torch)
     sys.modules.setdefault("torch.distributed", torch.distributed)
 
-tensordict = types.ModuleType("tensordict")
-tensordict.TensorDict = object
-transformers = types.ModuleType("transformers")
-transformers.PreTrainedTokenizer = object
-transformers.AutoTokenizer = object
-vllm = types.ModuleType("vllm")
-vllm.LLM = object
-vllm.SamplingParams = object
-sys.modules.setdefault("tensordict", tensordict)
-sys.modules["transformers"] = transformers
-sys.modules["vllm"] = vllm
+ensure_module("tensordict", TensorDict=object)
+ensure_module(
+    "transformers",
+    PreTrainedTokenizer=object,
+    AutoTokenizer=object,
+)
+ensure_module("vllm", LLM=object, SamplingParams=object)
 
 MODULE_PATH = (
     Path(__file__).parents[1] / "verl" / "workers" / "rollout" / "help_vllm_rollout_spmd.py"

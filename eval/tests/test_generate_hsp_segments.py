@@ -1,14 +1,20 @@
 import importlib.util
+import importlib.machinery
 import sys
 import types
 import unittest
 from pathlib import Path
 
 
-requests = types.ModuleType("requests")
-vllm = types.ModuleType("vllm")
-transformers = types.ModuleType("transformers")
-datasets_loader = types.ModuleType("datasets_loader")
+def ensure_module(name, **attrs):
+    try:
+        __import__(name)
+    except ImportError:
+        module = types.ModuleType(name)
+        module.__spec__ = importlib.machinery.ModuleSpec(name, loader=None)
+        for key, value in attrs.items():
+            setattr(module, key, value)
+        sys.modules.setdefault(name, module)
 
 
 class SamplingParams:
@@ -16,14 +22,10 @@ class SamplingParams:
         self.kwargs = kwargs
 
 
-vllm.SamplingParams = SamplingParams
-vllm.LLM = object
-transformers.AutoTokenizer = object
-transformers.PreTrainedTokenizer = object
-sys.modules.setdefault("requests", requests)
-sys.modules["vllm"] = vllm
-sys.modules["transformers"] = transformers
-sys.modules.setdefault("datasets_loader", datasets_loader)
+ensure_module("requests")
+ensure_module("vllm", SamplingParams=SamplingParams, LLM=object)
+ensure_module("transformers", AutoTokenizer=object, PreTrainedTokenizer=object)
+ensure_module("datasets_loader")
 
 MODULE_PATH = Path(__file__).parents[1] / "generate_withhelp.py"
 SPEC = importlib.util.spec_from_file_location("generate_hsp_segments_test", MODULE_PATH)

@@ -1,4 +1,5 @@
 import importlib.util
+import importlib.machinery
 import json
 import sys
 import tempfile
@@ -7,14 +8,24 @@ import unittest
 from pathlib import Path
 
 
-math_verify = types.ModuleType("math_verify")
-math_verify.parse = lambda value: value
-math_verify.verify = lambda left, right: left == right
-datasets = types.ModuleType("datasets")
-datasets.load_dataset = lambda *args, **kwargs: None
-sys.modules.setdefault("math_verify", math_verify)
-sys.modules.setdefault("pandas", types.ModuleType("pandas"))
-sys.modules.setdefault("datasets", datasets)
+def ensure_module(name, **attrs):
+    try:
+        __import__(name)
+    except ImportError:
+        module = types.ModuleType(name)
+        module.__spec__ = importlib.machinery.ModuleSpec(name, loader=None)
+        for key, value in attrs.items():
+            setattr(module, key, value)
+        sys.modules.setdefault(name, module)
+
+
+ensure_module(
+    "math_verify",
+    parse=lambda value: value,
+    verify=lambda left, right: left == right,
+)
+ensure_module("pandas")
+ensure_module("datasets", load_dataset=lambda *args, **kwargs: None)
 
 MODULE_PATH = Path(__file__).parents[1] / "datasets_loader.py"
 SPEC = importlib.util.spec_from_file_location("datasets_loader_local_test", MODULE_PATH)
