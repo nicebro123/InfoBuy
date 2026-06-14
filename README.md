@@ -93,7 +93,9 @@ bash run.sh download-data
 bash run.sh build-data
 bash run.sh smoke
 bash run.sh sft --gpu 0
+bash run.sh token-probe --gpu 0
 bash run.sh teacher --gpu 1 --port 7778
+bash run.sh rollout-smoke --gpu 0 --port 7778
 bash run.sh rl-smoke --gpu 0 --teacher-gpus 1
 bash run.sh train --teacher-gpus 1 --gpu-pairs '0'
 ```
@@ -354,6 +356,14 @@ Public tmux entrypoint:
 bash run.sh sft --gpu 0
 ```
 
+Before moving to RL, run the token probe. It checks that the SFT checkpoint has
+registered the HSP action tokens and assigns `<ASK>`, `<VERIFY>`, and `<ACCEPT>`
+reasonable next-token ranks in in-distribution protocol contexts:
+
+```bash
+bash run.sh token-probe --gpu 0
+```
+
 ## 7. Start The Teacher Service
 
 The teacher service answers HSP `<ASK>` and `<VERIFY>` calls during evaluation
@@ -384,6 +394,15 @@ curl -s http://127.0.0.1:7778/generate \
 ```
 
 Keep this service running while using HSP evaluation or RL.
+
+After the teacher is running, run a tiny HSP rollout smoke before GRPO. This
+uses the smoke raw split and forced ASK/VERIFY collection modes to verify that
+the student, teacher service, wrappers, event logging, and protocol validator
+work together:
+
+```bash
+bash run.sh rollout-smoke --gpu 0 --port 7778
+```
 
 ## 8. Evaluate The SFT Model
 
@@ -611,13 +630,15 @@ Use this order for a clean run:
 4. bash run.sh build-data
 5. bash run.sh smoke
 6. bash run.sh sft --gpu 0
-7. bash run.sh teacher --gpu 1 --port 7778
-8. bash run.sh eval --gpu 0
-9. optional outcome replay SFT
-10. bash run.sh rl-smoke --gpu 0 --teacher-gpus 1
-11. bash run.sh train --teacher-gpus 1 --gpu-pairs '0'
-12. merge RL actor checkpoint
-13. run final evaluation and summarize results
+7. bash run.sh token-probe --gpu 0
+8. bash run.sh teacher --gpu 1 --port 7778
+9. bash run.sh rollout-smoke --gpu 0 --port 7778
+10. bash run.sh eval --gpu 0
+11. optional outcome replay SFT
+12. bash run.sh rl-smoke --gpu 0 --teacher-gpus 1
+13. bash run.sh train --teacher-gpus 1 --gpu-pairs '0'
+14. merge RL actor checkpoint
+15. run final evaluation and summarize results
 ```
 
 ## 13. Local Checks

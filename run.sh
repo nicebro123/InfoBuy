@@ -17,7 +17,9 @@ Core commands:
   smoke                 Build and preflight tiny smoke data.
   sft-smoke             Run a tiny SFT smoke in tmux unless --foreground.
   sft                   Run full HSP SFT in tmux unless --foreground.
+  token-probe           Probe whether the SFT checkpoint can emit HSP actions.
   teacher               Start the teacher service in tmux unless --foreground.
+  rollout-smoke         Run tiny forced ASK/VERIFY HSP rollouts through teacher.
   rl-smoke              Launch the RL smoke spec in tmux.
   experiment NAME       Run one legacy named experiment in tmux.
   train                 Launch official config-driven experiment specs.
@@ -26,10 +28,17 @@ Core commands:
 
 Common options:
   --gpu ID              GPU id for teacher/SFT/RL/eval. Default varies by command.
+  --model-path PATH     Student checkpoint for token-probe/rollout-smoke/eval.
   --teacher-gpus LIST   GPU ids reserved for the teacher service. Default: 1.
   --port PORT           Teacher service port. Default: 7778.
   --spec PATH           Experiment spec for train/rl-smoke.
   --gpu-pairs LIST      Semicolon-separated GPU workers for train, e.g. '0;1;2;3'.
+  --max-examples N      Small data limit for rollout-smoke.
+  --samples-per-question N
+                         Samples per question for rollout-smoke.
+  --output-tag TAG      Output tag for rollout-smoke/eval artifacts.
+  --collection-modes M  Comma-separated rollout-smoke modes.
+  --probes-per-action N Number of token probes per HSP action.
   --skip-teacher-check  Skip teacher /generate health check for RL launch debugging.
   --overwrite           Run experiment queues even when completion markers exist.
   --skip-smoke          For train: do not run smoke checks before materializing specs.
@@ -41,6 +50,8 @@ Examples:
   bash run.sh smoke
   bash run.sh teacher --gpu 1
   bash run.sh sft --gpu 0
+  bash run.sh token-probe --gpu 0
+  bash run.sh rollout-smoke --gpu 0 --port 7778
   bash run.sh rl-smoke --gpu 0 --teacher-gpus 1
   bash run.sh train --teacher-gpus 1 --gpu-pairs '0'
 EOF
@@ -79,10 +90,16 @@ fi
 shift || true
 
 gpu=""
+model_path=""
 teacher_gpus="${INFOBUY_TEACHER_GPUS:-1}"
 port=7778
 spec=""
 gpu_pairs=""
+max_examples=""
+samples_per_question=""
+output_tag=""
+collection_modes=""
+probes_per_action=""
 foreground=0
 dry_run=0
 overwrite=0
@@ -94,6 +111,10 @@ while (($#)); do
   case "$1" in
     --gpu)
       gpu="$2"
+      shift 2
+      ;;
+    --model-path)
+      model_path="$2"
       shift 2
       ;;
     --teacher-gpus)
@@ -110,6 +131,26 @@ while (($#)); do
       ;;
     --gpu-pairs)
       gpu_pairs="$2"
+      shift 2
+      ;;
+    --max-examples)
+      max_examples="$2"
+      shift 2
+      ;;
+    --samples-per-question)
+      samples_per_question="$2"
+      shift 2
+      ;;
+    --output-tag)
+      output_tag="$2"
+      shift 2
+      ;;
+    --collection-modes)
+      collection_modes="$2"
+      shift 2
+      ;;
+    --probes-per-action)
+      probes_per_action="$2"
       shift 2
       ;;
     --foreground)
@@ -184,11 +225,52 @@ case "$command" in
     cmd="cd $(printf '%q' "$ROOT_DIR") && source setup/env.sh >/dev/null && CUDA_VISIBLE_DEVICES=$(printf '%q' "$gpu") $PYTHON_BIN -m SFT_stage.train_hsp --model_name \${INFOBUY_PRETRAINED_MODELS}/Qwen3-0.6B --dataset \${INFOBUY_GENERATED_DATA}/protocol/hsp_protocol_train_pilot_v1.jsonl --output_dir \${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft --max_seq_length 12288 --learning_rate 5e-6 --per_device_train_batch_size 1 --gradient_accumulation_steps 8 --num_train_epochs 1 --bf16"
     start_tmux_or_foreground "infobuy_sft_g${gpu//,/}" "$cmd" "$foreground"
     ;;
+  token-probe)
+    require_env
+    gpu="${gpu:-0}"
+    model_path="${model_path:-${MODEL_PATH:-${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft}}"
+    args=(--model_path "$model_path" --dataset "${INFOBUY_GENERATED_DATA}/protocol/hsp_protocol_train_pilot_v1.jsonl")
+    if [[ -n "$probes_per_action" ]]; then
+      args+=(--probes_per_action "$probes_per_action")
+    fi
+    if [[ -n "$output_tag" ]]; then
+      args+=(--output "${INFOBUY_LOGS}/sft/token_probe_${output_tag}.json")
+    fi
+    CUDA_VISIBLE_DEVICES="$gpu" "$PYTHON_BIN" scripts/token_probe_hsp.py "${args[@]}"
+    ;;
   teacher)
     require_env
     gpu="${gpu:-1}"
     cmd="cd $(printf '%q' "$ROOT_DIR") && source setup/env.sh >/dev/null && CUDA_VISIBLE_DEVICES=$(printf '%q' "$gpu") $PYTHON_BIN utils/vllm_service.py --model_path \${INFOBUY_TEACHER_MODELS}/qwen3-8b-main --port $(printf '%q' "$port") --tensor_parallel_size 1 --trust_remote_code"
     start_tmux_or_foreground "infobuy_teacher_${port}" "$cmd" "$foreground"
+    ;;
+  rollout-smoke)
+    require_env
+    gpu="${gpu:-0}"
+    model_path="${model_path:-${MODEL_PATH:-${INFOBUY_CKPT}/sft/qwen3-0.6b-hsp-sft}}"
+    args=(
+      --model_path "$model_path"
+      --data "${INFOBUY_GENERATED_DATA}/raw/numinamath_cot_synthetic_math_validation_smoke.jsonl"
+      --storage_path "$STORAGE_PATH"
+      --port "$port"
+      --gpu "$gpu"
+    )
+    if [[ -n "$max_examples" ]]; then
+      args+=(--max_examples "$max_examples")
+    fi
+    if [[ -n "$samples_per_question" ]]; then
+      args+=(--samples_per_question "$samples_per_question")
+    fi
+    if [[ -n "$output_tag" ]]; then
+      args+=(--output_tag "$output_tag" --output "${INFOBUY_LOGS}/eval/rollout_smoke_${output_tag}.json")
+    fi
+    if [[ -n "$collection_modes" ]]; then
+      args+=(--collection_modes "$collection_modes")
+    fi
+    if ((skip_teacher_check)); then
+      args+=(--skip_teacher_check)
+    fi
+    "$PYTHON_BIN" scripts/hsp_rollout_smoke.py "${args[@]}"
     ;;
   rl-smoke)
     require_env
@@ -281,6 +363,15 @@ PY
       scripts/launch_all_hsp_experiments.sh \
       eval/evaluate_forhelp.bash \
       RL_stage/examples/qwen3_hsp_grpo.sh
+    "$PYTHON_BIN" - <<'PY'
+from pathlib import Path
+for filename in [
+    "scripts/token_probe_hsp.py",
+    "scripts/hsp_rollout_smoke.py",
+]:
+    path = Path(filename)
+    compile(path.read_text(encoding="utf-8"), str(path), "exec")
+PY
     git diff --check
     ;;
   *)

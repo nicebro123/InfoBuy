@@ -122,6 +122,15 @@ python -m SFT_stage.preflight_hsp \
   --require_context_tokens
 ```
 
+Then run the token probe. This is the gate between SFT and RL: SFT only needs
+to open the HSP action space, but RL cannot explore the actions if the model
+does not assign `<ASK>`, `<VERIFY>`, and `<ACCEPT>` competitive next-token
+ranks in protocol contexts.
+
+```bash
+bash run.sh token-probe --gpu 0
+```
+
 ## 4. Teacher Service And Evaluation
 
 Start the teacher service:
@@ -133,6 +142,16 @@ python utils/vllm_service.py \
   --tensor_parallel_size 1 \
   --trust_remote_code
 ```
+
+Before GRPO, run a forced tiny rollout smoke:
+
+```bash
+bash run.sh rollout-smoke --gpu 0 --port 7778
+```
+
+This checks the runtime path that token-probe cannot cover: teacher calls,
+`<TEACHER_HELP>` / `<TEACHER_REVIEW>` injection, event counts, and segment
+validation.
 
 Run one HSP evaluation:
 
