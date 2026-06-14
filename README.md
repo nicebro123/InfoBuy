@@ -94,8 +94,8 @@ bash run.sh build-data
 bash run.sh smoke
 bash run.sh sft --gpu 0
 bash run.sh teacher --gpu 1 --port 7778
-bash run.sh rl-smoke --gpu 0
-bash run.sh train --gpu-pairs '0;1;2;3'
+bash run.sh rl-smoke --gpu 0 --teacher-gpus 1
+bash run.sh train --teacher-gpus 1 --gpu-pairs '0'
 ```
 
 Long-running commands start tmux sessions by default. Use `--foreground` when
@@ -104,6 +104,11 @@ you want to run in the current shell:
 ```bash
 bash run.sh teacher --gpu 1 --foreground
 ```
+
+HSP RL needs at least two distinct GPUs at launch time: one reserved for the
+teacher service and at least one for RL training. Do not include the teacher GPU
+inside `--gpu-pairs`. For example, if the teacher is on GPU `1`, use GPU `0`
+for a two-GPU smoke or `0;2;3` for a larger queue.
 
 The config-driven experiment system is:
 
@@ -298,7 +303,7 @@ RUN_RL=1 bash experiments/run_hsp_smoke.sh
 Preferred tmux/spec entrypoint:
 
 ```bash
-bash run.sh rl-smoke --gpu 0
+bash run.sh rl-smoke --gpu 0 --teacher-gpus 1
 ```
 
 ## 6. Train The Student With SFT
@@ -509,7 +514,7 @@ $INFOBUY_STORE/experiments/hsp_pilot/
 Smoke RL in tmux:
 
 ```bash
-bash run.sh rl-smoke --gpu 0
+bash run.sh rl-smoke --gpu 0 --teacher-gpus 1
 ```
 
 Pilot comparison in tmux:
@@ -517,13 +522,14 @@ Pilot comparison in tmux:
 ```bash
 bash run.sh train \
   --spec configs/experiments/hsp_pilot.yaml \
-  --gpu-pairs '0;1'
+  --teacher-gpus 1 \
+  --gpu-pairs '0'
 ```
 
 Official queue in tmux:
 
 ```bash
-bash run.sh train --gpu-pairs '0;1;2;3'
+bash run.sh train --teacher-gpus 1 --gpu-pairs '0;2;3'
 ```
 
 This materializes and launches:
@@ -542,7 +548,8 @@ Single-study lower-level entrypoint:
 ```bash
 bash scripts/launch_hsp_tmux.sh \
   --spec configs/experiments/hsp_ablation_cost.yaml \
-  --gpu-pairs '0;1'
+  --teacher-gpus 1 \
+  --gpu-pairs '0'
 ```
 
 The experiment matrix is documented in
@@ -601,8 +608,8 @@ Use this order for a clean run:
 7. bash run.sh teacher --gpu 1 --port 7778
 8. bash run.sh eval --gpu 0
 9. optional outcome replay SFT
-10. bash run.sh rl-smoke --gpu 0
-11. bash run.sh train --gpu-pairs '0;1;2;3'
+10. bash run.sh rl-smoke --gpu 0 --teacher-gpus 1
+11. bash run.sh train --teacher-gpus 1 --gpu-pairs '0'
 12. merge RL actor checkpoint
 13. run final evaluation and summarize results
 ```

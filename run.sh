@@ -26,9 +26,11 @@ Core commands:
 
 Common options:
   --gpu ID              GPU id for teacher/SFT/RL/eval. Default varies by command.
+  --teacher-gpus LIST   GPU ids reserved for the teacher service. Default: 1.
   --port PORT           Teacher service port. Default: 7778.
   --spec PATH           Experiment spec for train/rl-smoke.
   --gpu-pairs LIST      Semicolon-separated GPU workers for train, e.g. '0;1;2;3'.
+  --skip-teacher-check  Skip teacher /generate health check for RL launch debugging.
   --overwrite           Run experiment queues even when completion markers exist.
   --skip-smoke          For train: do not run smoke checks before materializing specs.
   --foreground          Run long command in the current shell instead of tmux.
@@ -39,8 +41,8 @@ Examples:
   bash run.sh smoke
   bash run.sh teacher --gpu 1
   bash run.sh sft --gpu 0
-  bash run.sh rl-smoke --gpu 0
-  bash run.sh train --gpu-pairs '0;1;2;3'
+  bash run.sh rl-smoke --gpu 0 --teacher-gpus 1
+  bash run.sh train --teacher-gpus 1 --gpu-pairs '0'
 EOF
 }
 
@@ -77,6 +79,7 @@ fi
 shift || true
 
 gpu=""
+teacher_gpus="${INFOBUY_TEACHER_GPUS:-1}"
 port=7778
 spec=""
 gpu_pairs=""
@@ -84,12 +87,17 @@ foreground=0
 dry_run=0
 overwrite=0
 skip_smoke=0
+skip_teacher_check=0
 extra=()
 
 while (($#)); do
   case "$1" in
     --gpu)
       gpu="$2"
+      shift 2
+      ;;
+    --teacher-gpus)
+      teacher_gpus="$2"
       shift 2
       ;;
     --port)
@@ -118,6 +126,10 @@ while (($#)); do
       ;;
     --skip-smoke)
       skip_smoke=1
+      shift
+      ;;
+    --skip-teacher-check)
+      skip_teacher_check=1
       shift
       ;;
     --)
@@ -182,7 +194,7 @@ case "$command" in
     require_env
     gpu="${gpu:-0}"
     spec="${spec:-configs/experiments/hsp_smoke.yaml}"
-    args=(--spec "$spec" --gpus "$gpu")
+    args=(--spec "$spec" --gpus "$gpu" --teacher-gpus "$teacher_gpus")
     if ((dry_run)); then
       args+=(--dry-run)
     else
@@ -190,6 +202,9 @@ case "$command" in
     fi
     if ((overwrite)); then
       args+=(--overwrite)
+    fi
+    if ((skip_teacher_check)); then
+      args+=(--skip-teacher-check)
     fi
     "$PYTHON_BIN" scripts/launch_hsp_experiments.py "${args[@]}"
     ;;
@@ -206,10 +221,17 @@ case "$command" in
     ;;
   train)
     require_env
+    if (( ! dry_run )) && [[ -z "$gpu_pairs" && -z "${INFOBUY_GPU_PAIRS:-}" && -z "${HSP_GPU_PAIRS:-}" ]]; then
+      echo "HSP RL launch requires explicit training GPUs via --gpu-pairs." >&2
+      echo "Example for a two-GPU machine with teacher on GPU 1:" >&2
+      echo "  bash run.sh train --teacher-gpus 1 --gpu-pairs '0'" >&2
+      exit 2
+    fi
     args=()
     if [[ -n "$spec" ]]; then
       args+=(--spec "$spec")
     fi
+    args+=(--teacher-gpus "$teacher_gpus")
     if [[ -n "$gpu_pairs" ]]; then
       args+=(--gpu-pairs "$gpu_pairs")
     fi
@@ -221,6 +243,9 @@ case "$command" in
     fi
     if ((skip_smoke)); then
       args+=(--skip-smoke)
+    fi
+    if ((skip_teacher_check)); then
+      args+=(--skip-teacher-check)
     fi
     bash scripts/launch_all_hsp_experiments.sh "${args[@]+"${args[@]}"}"
     ;;

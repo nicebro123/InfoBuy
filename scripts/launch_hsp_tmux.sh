@@ -25,12 +25,18 @@ Options:
   --overwrite       Run even when completion markers exist.
   --gpu-pairs LIST  Semicolon-separated GPU workers, e.g. '0;1;2,3'.
   --gpus LIST       Override every run GPU assignment, e.g. '0' or '0,1'.
+  --teacher-gpus LIST  GPU ids reserved by the already-running teacher service.
+  --skip-teacher-check Skip teacher /generate health check.
+  --teacher-check-timeout SECONDS
+  --teacher-check-retries N
+  --teacher-check-interval SECONDS
   -h, --help        Show this help.
 
 Environment:
   INFOBUY_PYTHON    Python executable to use. Default: python.
   INFOBUY_GPU_PAIRS Semicolon-separated GPU workers, e.g. '0;1;2;3'.
   INFOBUY_GPUS      Override every run GPU assignment.
+  INFOBUY_TEACHER_GPUS  Teacher service GPU reservation. Default in launcher: 1.
 EOF
 }
 
@@ -52,7 +58,11 @@ while (($#)); do
       MODE="--launch-tmux"
       shift
       ;;
-    --overwrite|--gpu-pairs|--gpus)
+    --skip-teacher-check)
+      EXTRA_ARGS+=("$1")
+      shift
+      ;;
+    --overwrite|--gpu-pairs|--gpus|--teacher-gpus|--teacher-check-timeout|--teacher-check-retries|--teacher-check-interval)
       if [[ "$1" == "--overwrite" ]]; then
         EXTRA_ARGS+=("$1")
         shift

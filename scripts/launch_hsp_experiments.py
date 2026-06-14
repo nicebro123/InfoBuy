@@ -13,12 +13,15 @@ The workflow mirrors the public experiment pattern used in EvoCo-style repos:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shlex
 import subprocess
+import time
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Iterable, Mapping, MutableMapping
+from urllib import request as urlrequest
 
 import yaml
 
@@ -120,6 +123,17 @@ def parse_gpu_pairs(raw: str | None) -> list[str]:
             if not gpu_id.isdigit():
                 raise ValueError(f"GPU ids must be integers: {pair!r}")
     return pairs
+
+
+def parse_gpu_ids(raw: str | None) -> set[str]:
+    if raw is None:
+        return set()
+    separators_normalized = str(raw).replace(";", ",").replace(" ", ",")
+    gpu_ids = {item.strip() for item in separators_normalized.split(",") if item.strip()}
+    invalid_ids = sorted(gpu_id for gpu_id in gpu_ids if not gpu_id.isdigit())
+    if invalid_ids:
+        raise ValueError("GPU ids must be integers: " + ", ".join(invalid_ids))
+    return gpu_ids
 
 
 def spec_experiments(spec: Mapping[str, Any], gpu_pairs: list[str], gpu_override: str | None) -> list[dict[str, Any]]:
@@ -336,6 +350,94 @@ def write_launch_files(
     return {"queues": [str(path) for path in queues], "tmux_launcher": str(tmux_path)}
 
 
+def ensure_runtime_gpu_requirements(
+    *,
+    runs: list[Mapping[str, Any]],
+    explicit_training_gpu_assignment: bool,
+    teacher_gpus: str | None,
+) -> None:
+    if not explicit_training_gpu_assignment:
+        raise ValueError(
+            "Launching HSP RL requires explicit training GPUs via --gpu-pairs or --gpus. "
+            "Example for a two-GPU machine with teacher on GPU 1: --gpus 0 --teacher-gpus 1."
+        )
+
+    train_gpus: set[str] = set()
+    for run in runs:
+        train_gpus.update(parse_gpu_ids(str(run["gpu"])))
+    if not train_gpus:
+        raise ValueError("No training GPUs were resolved for launch.")
+
+    teacher_gpu_set = parse_gpu_ids(teacher_gpus)
+    if not teacher_gpu_set:
+        raise ValueError(
+            "Launching HSP RL requires --teacher-gpus so the teacher service GPU is reserved."
+        )
+
+    overlap = train_gpus & teacher_gpu_set
+    if overlap:
+        raise ValueError(
+            "Training GPU(s) overlap with teacher GPU(s): "
+            + ", ".join(sorted(overlap))
+            + ". Use disjoint GPUs, e.g. --gpus 0 --teacher-gpus 1."
+        )
+
+    if len(train_gpus | teacher_gpu_set) < 2:
+        raise ValueError("HSP RL launch requires at least two distinct GPUs: one for teacher and one for training.")
+
+
+def check_teacher_service(port: int, *, timeout: float) -> None:
+    url = f"http://127.0.0.1:{port}/generate"
+    payload = json.dumps(
+        [{"prompt": "Health check. Reply briefly.", "max_tokens": 1, "temperature": 0.0, "top_p": 1.0}]
+    ).encode("utf-8")
+    request = urlrequest.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlrequest.urlopen(request, timeout=timeout) as response:
+        body = response.read().decode("utf-8")
+        status = getattr(response, "status", response.getcode())
+    if status != 200:
+        raise RuntimeError(f"Teacher service {url} returned HTTP {status}: {body[:200]}")
+    data = json.loads(body)
+    if "error" in data:
+        raise RuntimeError(f"Teacher service {url} returned error: {data['error']}")
+    results = data.get("results")
+    if not isinstance(results, list) or len(results) != 1:
+        raise RuntimeError(f"Teacher service {url} returned an invalid response schema: {body[:200]}")
+
+
+def check_teacher_services(
+    ports: Iterable[int],
+    *,
+    timeout: float,
+    retries: int,
+    retry_interval: float,
+) -> None:
+    for port in sorted(set(int(port) for port in ports)):
+        last_error: Exception | None = None
+        for attempt in range(1, max(retries, 1) + 1):
+            try:
+                check_teacher_service(port, timeout=timeout)
+                print(f"teacher health check passed: http://127.0.0.1:{port}/generate")
+                last_error = None
+                break
+            except Exception as error:  # noqa: BLE001 - surface any connection/schema problem clearly.
+                last_error = error
+                if attempt < max(retries, 1):
+                    time.sleep(retry_interval)
+        if last_error is not None:
+            raise RuntimeError(
+                f"Teacher service health check failed on port {port}. "
+                "Start it first, e.g. `bash run.sh teacher --gpu 1 --port 7778`, "
+                "or pass --skip-teacher-check only for controlled debugging. "
+                f"Last error: {last_error}"
+            ) from last_error
+
+
 def launch_foreground(queues: Iterable[str]) -> None:
     for queue in queues:
         subprocess.run(["bash", queue], check=True)
@@ -355,6 +457,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--overwrite", action="store_true", help="Run even when completion markers exist.")
     parser.add_argument("--gpu-pairs", default=None, help="Semicolon-separated GPU workers, e.g. '0;1;2,3'.")
     parser.add_argument("--gpus", default=None, help="Override every run GPU assignment, e.g. '0' or '0,1'.")
+    parser.add_argument(
+        "--teacher-gpus",
+        default=None,
+        help="GPU ids reserved by the already-running teacher service. Default: $INFOBUY_TEACHER_GPUS or 1.",
+    )
+    parser.add_argument("--skip-teacher-check", action="store_true", help="Skip teacher /generate health check.")
+    parser.add_argument(
+        "--teacher-check-timeout",
+        type=float,
+        default=float(os.environ.get("INFOBUY_TEACHER_CHECK_TIMEOUT", "30")),
+        help="Seconds to wait for each teacher health request.",
+    )
+    parser.add_argument(
+        "--teacher-check-retries",
+        type=int,
+        default=int(os.environ.get("INFOBUY_TEACHER_CHECK_RETRIES", "1")),
+        help="Teacher health check attempts before launch.",
+    )
+    parser.add_argument(
+        "--teacher-check-interval",
+        type=float,
+        default=float(os.environ.get("INFOBUY_TEACHER_CHECK_INTERVAL", "5")),
+        help="Seconds between teacher health retries.",
+    )
     return parser.parse_args()
 
 
@@ -364,10 +490,11 @@ def main() -> None:
     spec_path = expand_path(args.spec, cwd=repo_root)
     spec = read_yaml(spec_path)
 
-    gpu_pairs = parse_gpu_pairs(
-        args.gpu_pairs or os.environ.get("INFOBUY_GPU_PAIRS") or os.environ.get("HSP_GPU_PAIRS")
-    )
-    experiments = spec_experiments(spec, gpu_pairs, args.gpus or os.environ.get("INFOBUY_GPUS"))
+    gpu_pairs_raw = args.gpu_pairs or os.environ.get("INFOBUY_GPU_PAIRS") or os.environ.get("HSP_GPU_PAIRS")
+    gpu_override_raw = args.gpus or os.environ.get("INFOBUY_GPUS")
+    gpu_pairs = parse_gpu_pairs(gpu_pairs_raw)
+    experiments = spec_experiments(spec, gpu_pairs, gpu_override_raw)
+    teacher_gpus = args.teacher_gpus or os.environ.get("INFOBUY_TEACHER_GPUS") or "1"
     study_name = slug(str(spec.get("study_name") or spec_path.stem))
     output_root = expand_path(str(spec.get("output_root", "${INFOBUY_STORE}/experiments")), cwd=repo_root)
     study_dir = output_root / study_name
@@ -389,6 +516,7 @@ def main() -> None:
         "study_name": study_name,
         "spec": str(spec_path),
         "study_dir": str(study_dir),
+        "teacher_gpus": teacher_gpus,
         "runs": runs,
         **launch_files,
     }
@@ -400,11 +528,29 @@ def main() -> None:
     for run in runs:
         print(f"- {run['run_name']} [{run['status']}] gpu={run['gpu']} config={run['run_config']}")
 
-    if args.launch_tmux or args.tmux:
+    launch_requested = (args.launch_tmux or args.tmux or args.launch) and not args.dry_run
+    if launch_requested:
+        ensure_runtime_gpu_requirements(
+            runs=runs,
+            explicit_training_gpu_assignment=bool(gpu_pairs_raw or gpu_override_raw),
+            teacher_gpus=teacher_gpus,
+        )
+        if not args.skip_teacher_check:
+            check_teacher_services(
+                (int(run["teacher_port"]) for run in runs if run["status"] != "exists"),
+                timeout=args.teacher_check_timeout,
+                retries=args.teacher_check_retries,
+                retry_interval=args.teacher_check_interval,
+            )
+
+    if (args.launch_tmux or args.tmux) and not args.dry_run:
         launch_tmux(str(launch_files["tmux_launcher"]))
-    elif args.launch:
+    elif args.launch and not args.dry_run:
         launch_foreground(launch_files["queues"])
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as error:  # noqa: BLE001 - CLI entrypoint should print concise launch errors.
+        raise SystemExit(f"ERROR: {error}") from None

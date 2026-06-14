@@ -6,9 +6,13 @@ is:
 ```bash
 bash run.sh smoke
 bash run.sh teacher --gpu 1
-bash run.sh rl-smoke --gpu 0
-bash run.sh train --spec configs/experiments/hsp_pilot.yaml --gpu-pairs '0;1'
+bash run.sh rl-smoke --gpu 0 --teacher-gpus 1
+bash run.sh train --spec configs/experiments/hsp_pilot.yaml --teacher-gpus 1 --gpu-pairs '0'
 ```
+
+Launching HSP RL requires two distinct GPU roles: the already-running teacher
+service and at least one training worker. Keep `--teacher-gpus` disjoint from
+`--gpu-pairs`.
 
 Specs are compact study files. `scripts/launch_hsp_experiments.py` expands each
 experiment into immutable files under `$INFOBUY_STORE/experiments/<study>/`:
@@ -82,8 +86,9 @@ python scripts/launch_hsp_experiments.py \
 Use multiple GPU workers:
 
 ```bash
-INFOBUY_GPU_PAIRS='0;1;2;3' \
+INFOBUY_GPU_PAIRS='0;2;3' \
 python scripts/launch_hsp_experiments.py \
   --spec configs/experiments/hsp_official.yaml \
+  --teacher-gpus 1 \
   --launch-tmux
 ```
